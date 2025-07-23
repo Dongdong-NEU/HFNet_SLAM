@@ -1,0 +1,85 @@
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+WARNING: onnx2trt_utils.cpp:374: Your ONNX model has been generated with INT64 weights, while TensorRT does not natively support INT64. Attempting to cast down to INT32.
+Loaded 2210871 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+ERROR: 1: [stdArchiveReader.cpp::StdArchiveReaderInitCommon::46] Error Code 1: Serialization (Serialization assertion stdVersionRead == serializationVersion failed.Version tag does not match. Note: Current Version: 236, Serialized Engine Version: 232)
+ERROR: 4: The timing cache will not be used!
+WARNING: TensorRT encountered issues when converting weights between types and that could affect accuracy.
+WARNING: If this is not the desired behavior, please modify the weights or retrain with regularization to adjust the magnitude of the weights.
+WARNING: Check verbose logs for the list of affected weights.
+WARNING: - 50 weights are affected by this issue: Detected subnormal FP16 values.
+WARNING: - 31 weights are affected by this issue: Detected values less than smallest positive FP16 subnormal value and converted them to the FP16 minimum subnormalized value.
+Loaded 2210871 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+ERROR: 1: [stdArchiveReader.cpp::StdArchiveReaderInitCommon::46] Error Code 1: Serialization (Serialization assertion stdVersionRead == serializationVersion failed.Version tag does not match. Note: Current Version: 236, Serialized Engine Version: 232)
+ERROR: 4: The timing cache will not be used!
+Saved 277160 bytes of timing cache to /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+ERROR: 3: [runtime.cpp::~Runtime::346] Error Code 3: API Usage Error (Parameter check failed at: runtime/rt/runtime.cpp::~Runtime::346, condition: mEngineCounter.use_count() == 1. Destroying a runtime before destroying deserialized engines created by the runtime leads to undefined behavior.
+)
+Successfully loaded HFNet TensorRT model. Mode: ImageToLocalAndGlobal Shape: [1, 480, 752, 1]
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+WARNING: onnx2trt_utils.cpp:374: Your ONNX model has been generated with INT64 weights, while TensorRT does not natively support INT64. Attempting to cast down to INT32.
+Loaded 277160 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: TensorRT encountered issues when converting weights between types and that could affect accuracy.
+WARNING: If this is not the desired behavior, please modify the weights or retrain with regularization to adjust the magnitude of the weights.
+WARNING: Check verbose logs for the list of affected weights.
+WARNING: - 13 weights are affected by this issue: Detected subnormal FP16 values.
+WARNING: - 3 weights are affected by this issue: Detected values less than smallest positive FP16 subnormal value and converted them to the FP16 minimum subnormalized value.
+Loaded 277160 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+Saved 460616 bytes of timing cache to /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+ERROR: 3: [runtime.cpp::~Runtime::346] Error Code 3: API Usage Error (Parameter check failed at: runtime/rt/runtime.cpp::~Runtime::346, condition: mEngineCounter.use_count() == 1. Destroying a runtime before destroying deserialized engines created by the runtime leads to undefined behavior.
+)
+Successfully loaded HFNet TensorRT model. Mode: ImageToLocal Shape: [1, 400, 627, 1]
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+WARNING: onnx2trt_utils.cpp:374: Your ONNX model has been generated with INT64 weights, while TensorRT does not natively support INT64. Attempting to cast down to INT32.
+Loaded 460616 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: TensorRT encountered issues when converting weights between types and that could affect accuracy.
+WARNING: If this is not the desired behavior, please modify the weights or retrain with regularization to adjust the magnitude of the weights.
+WARNING: Check verbose logs for the list of affected weights.
+WARNING: - 13 weights are affected by this issue: Detected subnormal FP16 values.
+WARNING: - 3 weights are affected by this issue: Detected values less than smallest positive FP16 subnormal value and converted them to the FP16 minimum subnormalized value.
+Loaded 460616 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+Saved 644072 bytes of timing cache to /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+ERROR: 3: [runtime.cpp::~Runtime::346] Error Code 3: API Usage Error (Parameter check failed at: runtime/rt/runtime.cpp::~Runtime::346, condition: mEngineCounter.use_count() == 1. Destroying a runtime before destroying deserialized engines created by the runtime leads to undefined behavior.
+)
+Successfully loaded HFNet TensorRT model. Mode: ImageToLocal Shape: [1, 333, 522, 1]
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+WARNING: onnx2trt_utils.cpp:374: Your ONNX model has been generated with INT64 weights, while TensorRT does not natively support INT64. Attempting to cast down to INT32.
+Loaded 644072 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: TensorRT encountered issues when converting weights between types and that could affect accuracy.
+WARNING: If this is not the desired behavior, please modify the weights or retrain with regularization to adjust the magnitude of the weights.
+WARNING: Check verbose logs for the list of affected weights.
+WARNING: - 13 weights are affected by this issue: Detected subnormal FP16 values.
+WARNING: - 3 weights are affected by this issue: Detected values less than smallest positive FP16 subnormal value and converted them to the FP16 minimum subnormalized value.
+Loaded 644072 bytes of timing cache from /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+Saved 827528 bytes of timing cache to /home/xhd/HFNet_SLAM-main/modle/HFNet-RT/HF-Net.cache
+WARNING: CUDA lazy loading is not enabled. Enabling it can significantly reduce device memory usage and speed up TensorRT initialization. See "Lazy Loading" section of CUDA documentation https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#lazy-loading
+ERROR: 3: [runtime.cpp::~Runtime::346] Error Code 3: API Usage Error (Parameter check failed at: runtime/rt/runtime.cpp::~Runtime::346, condition: mEngineCounter.use_count() == 1. Destroying a runtime before destroying deserialized engines created by the runtime leads to undefined behavior.
+)
+Successfully loaded HFNet TensorRT model. Mode: ImageToLocal Shape: [1, 278, 435, 1]
+Initialization of Atlas from scratch 
+Creation of new map with id: 0
+Creation of new map with last KF id: 0
+There are 1 cameras in the atlas
+Camera 0 is pinhole
+Gtk-Message: 13:30:44.775: Failed to load module "canberra-gtk-module"
+Starting the Viewer
+First KF:0; Map init KF:0
+New Map created with 561 points
+Init frame id: 0
+Shutdown
+Shutdown
+
+Saving trajectory to ./evaluation/Euroc/trajectory.txt ...
+There are 1 maps in the atlas
+  Map 0 has 345 KFs
+
+End of saving trajectory to ./evaluation/Euroc/trajectory.txt ...
+
+Saving keyframe trajectory to ./evaluation/Euroc/trajectory_keyframe.txt ...
+-------
+
+median tracking time: 0.016527401283383369
+mean tracking time: 0.016812354326248169
+
