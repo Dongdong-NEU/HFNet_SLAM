@@ -177,7 +177,9 @@ add_executable(test_extractors
 target_link_libraries(test_extractors ${PROJECT_NAME})
 
 add_executable(test_match_global_feats
-        Examples/Utility/test_match_global_feats.cc)
+        Examples/Utility/test_match_global_feats.cc
+        Examples/Utility/common.cpp
+        Examples/Utility/loop_visual.cpp)
 target_link_libraries(test_match_global_feats ${PROJECT_NAME})
 
 add_executable(test_match_local_feats
