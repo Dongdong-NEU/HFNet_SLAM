@@ -4,8 +4,8 @@
 #include <vector>
 #include <string>
 
-#include "Eigen/Core"
-#include "Eigen/Geometry"
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
 #include "nanoflann.hpp"
@@ -23,13 +23,14 @@ vector<string> GetPngFiles(string strPngDir);
 struct KeyFrameNetVlad
 {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    cv::Mat mGlobalDescriptors;
+    cv::Mat mGlobalDescriptors_front, mGlobalDescriptors_rear;
     int mnFrameId;
-    float mPlaceRecognitionScore = 1.0;
+    float mPlaceRecognitionScore_front = 1.0, mPlaceRecognitionScore_rear = 1.0; 
     double timeStamp;
     Eigen::Matrix4d curPose;
 
-    KeyFrameNetVlad(int id, const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
+    KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
+    KeyFrameNetVlad(int id ,const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
 };
 
 // TUM轨迹数据结构
@@ -44,6 +45,14 @@ struct TUMTrajectoryData {
 
 // 对齐TUM轨迹数据到图像文件
 struct AlignedTUMData {
+    vector<double> times;
+    std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> poses;
+};
+
+// 双相机对齐数据结构
+struct AlignedDualCameraData {
+    vector<string> files_front;
+    vector<string> files_rear;
     vector<double> times;
     std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> poses;
 };
@@ -67,12 +76,18 @@ vector<double> GetTimesFromFileKitti(const string& filePath);
 std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> GetGTPosesFromFileKitti(const string& filePath);
 std::vector<TUMTrajectoryData, Eigen::aligned_allocator<TUMTrajectoryData>> ReadTUMTrajectory(const string& filePath);
 AlignedTUMData AlignTUMTrajectoryToImages(const string& filePath, const vector<string>& imageFiles);
+AlignedDualCameraData AlignDualCameraDataToTrajectory(const string& strDatasetPath_front, 
+                                                      const string& strDatasetPath_rear, 
+                                                      const string& strGTPosesPath);
 vector<double> GetTimesFromFileTUM(const string& filePath, const vector<string>& imageFiles);
 std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> GetGTPosesFromFileTUM(const string& filePath, const vector<string>& imageFiles);
 
 KeyFrameDB GetNCandidateLoopFrameCV(KeyFrameNetVlad* query, const KeyFrameDB &db, int k);
-KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB &db, int k);
+KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB &db, int k, bool &use_rear);
 
 void ShowImageWithText(const string &title, const cv::Mat &image, const string &str);
+
+void LoadConfigYaml(const string &configPath, cv::Size &ImSize);
+
 
 #endif // COMMON_H

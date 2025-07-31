@@ -47,8 +47,8 @@ void TrajectoryViewer::UpdateLoopDetection(int frame_id, const Eigen::Vector3d& 
     
     // 调试输出：确保数据正确更新
     if (!eigen_cands.empty()) {
-        std::cout << "UpdateLoopDetection: Updated with " << eigen_cands.size() 
-                  << " Eigen candidates for frame " << frame_id << std::endl;
+        // std::cout << "UpdateLoopDetection: Updated with " << eigen_cands.size() 
+        //           << " Eigen candidates for frame " << frame_id << std::endl;
     }
 }
 
@@ -178,7 +178,7 @@ void TrajectoryViewer::Run() {
         
         // 绘制Eigen候选帧（先绘制，避免被KDTree线条覆盖）
         if (menu_show_eigen && !eigen_copy.empty()) {
-            std::cout << "Pangolin: Drawing " << eigen_copy.size() << " Eigen candidates (yellow)" << std::endl;
+            // std::cout << "Pangolin: Drawing " << eigen_copy.size() << " Eigen candidates (yellow)" << std::endl;
             // 绘制黄色点
             glColor3f(1.0f, 1.0f, 0.0f);
             glPointSize(menu_point_size * 2.0f);  // 稍大一些以便观察
@@ -190,8 +190,8 @@ void TrajectoryViewer::Run() {
             
             // 绘制黄色连线（更粗一些，确保可见）
             if (frame_id_copy >= 0) {
-                std::cout << "Pangolin: Drawing " << eigen_copy.size() << " yellow lines from frame " 
-                          << frame_id_copy << std::endl;
+                // std::cout << "Pangolin: Drawing " << eigen_copy.size() << " yellow lines from frame " 
+                        //   << frame_id_copy << std::endl;
                 glColor3f(1.0f, 1.0f, 0.0f);
                 glLineWidth(menu_line_width * 2.0f);  // 更粗的线
                 for (const auto& pos : eigen_copy) {
@@ -202,7 +202,7 @@ void TrajectoryViewer::Run() {
                 }
             }
         } else if (menu_show_eigen) {
-            std::cout << "Pangolin: No Eigen candidates to draw (empty eigen_copy)" << std::endl;
+            // std::cout << "Pangolin: No Eigen candidates to draw (empty eigen_copy)" << std::endl;
         }
         
         // 绘制KDTree候选帧（后绘制，使用较细的线）
@@ -295,14 +295,15 @@ void UpdateVisualization(const std::vector<Eigen::Matrix4d, Eigen::aligned_alloc
         for (const auto& candidate : loopCandidates) {
             if (candidate->mnFrameId < poses.size()) {
                 eigen_positions.push_back(poses[candidate->mnFrameId].block<3,1>(0,3));
-                scores.push_back(candidate->mPlaceRecognitionScore);
+                // TODO: BUGFIXME: 这里需要根据实际情况选择前后视图
+                scores.push_back(candidate->mPlaceRecognitionScore_front);
             }
         }
         
         // 调试输出：检查转换后的位置数据
         if (!eigen_positions.empty()) {
-            std::cout << "UpdateVisualization: Converting " << eigen_positions.size() 
-                      << " Eigen candidates to positions" << std::endl;
+            // std::cout << "UpdateVisualization: Converting " << eigen_positions.size() 
+            //           << " Eigen candidates to positions" << std::endl;
         }
         
         g_viewer->UpdateLoopDetection(queryFrameId, current_pos, kdtree_positions, eigen_positions, scores);

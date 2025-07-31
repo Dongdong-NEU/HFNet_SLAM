@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project(HFNet_SLAM)
 
-set(DEFAULT_BUILD_TYPE "Debug")
+set(DEFAULT_BUILD_TYPE "Release")
 if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' as none was specified.")
     set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE STRING "Choose the type of build." FORCE)
@@ -179,7 +179,8 @@ target_link_libraries(test_extractors ${PROJECT_NAME})
 add_executable(test_match_global_feats
         Examples/Utility/test_match_global_feats.cc
         Examples/Utility/common.cpp
-        Examples/Utility/loop_visual.cpp)
+        Examples/Utility/loop_visual.cpp
+        Examples/Utility/fisheye_utils.cpp)
 target_link_libraries(test_match_global_feats ${PROJECT_NAME})
 
 add_executable(test_match_local_feats

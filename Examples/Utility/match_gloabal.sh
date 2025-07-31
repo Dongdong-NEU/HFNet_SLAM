@@ -7,6 +7,11 @@
 
 
 ./test_match_global_feats \
-/home/xihuidong/codetree/repo/visual_mapping_test/image_3 \
+/home/xihuidong/codetree/repo/visual_mapping_test/fisheye1 \
+/home/xihuidong/codetree/repo/visual_mapping_test/fisheye3 \
 /home/xihuidong/Documents/workspace/HFNet_SLAM-main/checkpointout_end \
-/home/xihuidong/codetree/repo/visual_mapping_test/dr_pose.txt
+/home/xihuidong/codetree/repo/visual_mapping_test/dr_pose.txt \
+/home/xihuidong/Documents/workspace/HFNet_SLAM-main/Examples/Utility/cameras.cfg \
+/home/xihuidong/Documents/workspace/HFNet_SLAM-main/Examples/Utility/config.yaml
+
+
