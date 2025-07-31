@@ -1,5 +1,5 @@
-#ifndef HFNETRTMODEL_H
-#define HFNETRTMODEL_H
+#ifndef NetVladRTMODEL_H
+#define NetVladRTMODEL_H
 
 #include <string>
 #include <memory>
@@ -11,7 +11,7 @@
 #include "Extractors/TensorRTBuffers.h"
 #endif // USE_TENSORRT
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 #ifdef USE_TENSORRT
@@ -34,11 +34,11 @@ public:
     nvinfer1::Dims shape;
 };
 
-class HFNetRTModel : public BaseModel
+class NetVladRTModel : public BaseModel
 {
 public:
-    HFNetRTModel(const std::string &strModelDir, ModelDetectionMode mode, const cv::Vec4i inputShape);
-    virtual ~HFNetRTModel(void) = default;
+    NetVladRTModel(const std::string &strModelDir, ModelDetectionMode mode, const cv::Vec4i inputShape);
+    virtual ~NetVladRTModel(void) = default;
 
     bool Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyPoints, cv::Mat &localDescriptors, cv::Mat &globalDescriptors,
                 int nKeypointsNum, float threshold) override;
@@ -50,13 +50,13 @@ public:
 
     bool IsValid(void) override { return mbVaild; }
 
-    ModelType Type(void) override { return kHFNetTFModel; }
+    ModelType Type(void) override { return kNetVladTFModel; }
 
     std::shared_ptr<nvinfer1::ICudaEngine> mEngine = nullptr;
 
 protected:
 
-    bool LoadHFNetTRModel(void);
+    bool LoadNetVladTRModel(void);
 
     void LoadTimingCacheFile(const std::string& strFileName, std::unique_ptr<nvinfer1::IBuilderConfig>& config, std::unique_ptr<nvinfer1::ITimingCache>& timingCache);
 
@@ -100,10 +100,10 @@ protected:
 
 #else // USE_TENSORRT
 
-class HFNetRTModel : public BaseModel
+class NetVladRTModel : public BaseModel
 {
 public:
-    HFNetRTModel(const std::string &strModelDir, ModelDetectionMode mode, const cv::Vec4i inputShape)
+    NetVladRTModel(const std::string &strModelDir, ModelDetectionMode mode, const cv::Vec4i inputShape)
     {
         std::cerr << "You must set USE_TENSORRT in CMakeLists.txt to enable tensorRT function." << std::endl;
         exit(-1);
@@ -119,11 +119,11 @@ public:
 
     bool IsValid(void) override { return false; }
 
-    ModelType Type(void) override { return kHFNetRTModel; }
+    ModelType Type(void) override { return kNetVladRTModel; }
 };
 
 #endif // USE_TENSORRT
 
-} // namespace ORB_SLAM3
+} // namespace DeepRoute
 
-#endif // HFNETRTMODEL_H
+#endif // NetVladRTMODEL_H

@@ -1,6 +1,6 @@
-#include "Extractors/HFNetRTModel.h"
+#include "Extractors/NetVladRTModel.h"
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 #ifdef USE_TENSORRT
@@ -37,7 +37,7 @@ void RTLogger::log(Severity severity, AsciiChar const* msg) noexcept
     std::cerr << ": " << msg << endl;
 }
 
-HFNetRTModel::HFNetRTModel(const std::string &strModelDir, ModelDetectionMode mode, 
+NetVladRTModel::NetVladRTModel(const std::string &strModelDir, ModelDetectionMode mode, 
                            const cv::Vec4i inputShape)
 {
     mStrTRModelDir = strModelDir + "/";
@@ -45,7 +45,7 @@ HFNetRTModel::HFNetRTModel(const std::string &strModelDir, ModelDetectionMode mo
     mInputShape = {inputShape(0), inputShape(1), inputShape(2), inputShape(3)};
     mStrONNXFile = mStrTRModelDir + "HF-Net.onnx";
     mStrCacheFile = mStrTRModelDir + "HF-Net.cache";
-    mbVaild = LoadHFNetTRModel();
+    mbVaild = LoadNetVladTRModel();
 
     if (!mbVaild) return;
 
@@ -89,7 +89,7 @@ HFNetRTModel::HFNetRTModel(const std::string &strModelDir, ModelDetectionMode mo
     mbVaild = true;
 }
 
-bool HFNetRTModel::Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyPoints, 
+bool NetVladRTModel::Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyPoints, 
                           cv::Mat &localDescriptors, cv::Mat &globalDescriptors,
                           int nKeypointsNum, float threshold)
 {
@@ -105,7 +105,7 @@ bool HFNetRTModel::Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyP
     return true;
 }
 
-bool HFNetRTModel::Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyPoints, cv::Mat &localDescriptors,
+bool NetVladRTModel::Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyPoints, cv::Mat &localDescriptors,
                             int nKeypointsNum, float threshold)
 {
     if (mMode != kImageToLocal) return false;
@@ -117,7 +117,7 @@ bool HFNetRTModel::Detect(const cv::Mat &image, std::vector<cv::KeyPoint> &vKeyP
     return true;
 }
 
-bool HFNetRTModel::Detect(const cv::Mat &intermediate, cv::Mat &globalDescriptors)
+bool NetVladRTModel::Detect(const cv::Mat &intermediate, cv::Mat &globalDescriptors)
 {
     if (mMode != kIntermediateToGlobal) return false;
 
@@ -127,7 +127,7 @@ bool HFNetRTModel::Detect(const cv::Mat &intermediate, cv::Mat &globalDescriptor
     return true;
 }
 
-bool HFNetRTModel::Run(void)
+bool NetVladRTModel::Run(void)
 {
     if (!mbVaild) return false;
     if (mvInputTensors.empty()) return false;
@@ -144,7 +144,7 @@ bool HFNetRTModel::Run(void)
     return true;
 }
 
-void HFNetRTModel::GetLocalFeaturesFromTensor(
+void NetVladRTModel::GetLocalFeaturesFromTensor(
     const RTTensor &tScoreDense, const RTTensor &tDescriptorsMap,
     std::vector<cv::KeyPoint> &vKeyPoints, cv::Mat &localDescriptors, 
     int nKeypointsNum, float threshold)
@@ -208,7 +208,7 @@ void HFNetRTModel::GetLocalFeaturesFromTensor(
     }
 }
 
-void HFNetRTModel::GetGlobalDescriptorFromTensor(const RTTensor &tDescriptors, 
+void NetVladRTModel::GetGlobalDescriptorFromTensor(const RTTensor &tDescriptors, 
                                                  cv::Mat &globalDescriptors)
 {
     auto vResGlobalDescriptor = static_cast<float*>(tDescriptors.data);
@@ -219,7 +219,7 @@ void HFNetRTModel::GetGlobalDescriptorFromTensor(const RTTensor &tDescriptors,
     }
 }
 
-bool HFNetRTModel::LoadHFNetTRModel(void)
+bool NetVladRTModel::LoadNetVladTRModel(void)
 {
     auto builder = unique_ptr<IBuilder>(createInferBuilder(mLogger));
     if (!builder) return false;
@@ -257,7 +257,7 @@ bool HFNetRTModel::LoadHFNetTRModel(void)
     return true;
 }
 
-void HFNetRTModel::LoadTimingCacheFile(const std::string& strFileName, std::unique_ptr<IBuilderConfig>& config, std::unique_ptr<ITimingCache>& timingCache)
+void NetVladRTModel::LoadTimingCacheFile(const std::string& strFileName, std::unique_ptr<IBuilderConfig>& config, std::unique_ptr<ITimingCache>& timingCache)
 {
     std::ifstream iFile(strFileName, std::ios::in | std::ios::binary);
     std::vector<char> content;
@@ -282,7 +282,7 @@ void HFNetRTModel::LoadTimingCacheFile(const std::string& strFileName, std::uniq
     config->setTimingCache(*timingCache, false);
 }
 
-void HFNetRTModel::UpdateTimingCacheFile(const std::string& strFileName, std::unique_ptr<IBuilderConfig>& config, std::unique_ptr<ITimingCache>& timingCache)
+void NetVladRTModel::UpdateTimingCacheFile(const std::string& strFileName, std::unique_ptr<IBuilderConfig>& config, std::unique_ptr<ITimingCache>& timingCache)
 {
     std::unique_ptr<nvinfer1::ITimingCache> fileTimingCache{config->createTimingCache(static_cast<const void*>(nullptr), 0)};
 
@@ -319,7 +319,7 @@ void HFNetRTModel::UpdateTimingCacheFile(const std::string& strFileName, std::un
     std::cerr << "Saved " << blob->size() << " bytes of timing cache to " << strFileName << std::endl;
 }
 
-std::string HFNetRTModel::DecideEigenFileName(const std::string& strEngineSaveDir, ModelDetectionMode mode, const Dims4 inputShape)
+std::string NetVladRTModel::DecideEigenFileName(const std::string& strEngineSaveDir, ModelDetectionMode mode, const Dims4 inputShape)
 {
     string strFileName;
     strFileName = gStrModelDetectionName[mode] + "_" + 
@@ -330,7 +330,7 @@ std::string HFNetRTModel::DecideEigenFileName(const std::string& strEngineSaveDi
     return strEngineSaveDir + "/" + strFileName;
 }
 
-bool HFNetRTModel::SaveEngineToFile(const std::string& strEngineSaveFile, const unique_ptr<IHostMemory>& serializedEngine)
+bool NetVladRTModel::SaveEngineToFile(const std::string& strEngineSaveFile, const unique_ptr<IHostMemory>& serializedEngine)
 {
     std::ofstream engineFile(strEngineSaveFile, std::ios::binary);
     engineFile.write(reinterpret_cast<char const*>(serializedEngine->data()), serializedEngine->size());
@@ -342,7 +342,7 @@ bool HFNetRTModel::SaveEngineToFile(const std::string& strEngineSaveFile, const 
     return true;
 }
 
-bool HFNetRTModel::LoadEngineFromFile(const std::string& strEngineSaveFile)
+bool NetVladRTModel::LoadEngineFromFile(const std::string& strEngineSaveFile)
 {
     std::ifstream engineFile(strEngineSaveFile, std::ios::binary);
     if (!engineFile.good())
@@ -374,7 +374,7 @@ bool HFNetRTModel::LoadEngineFromFile(const std::string& strEngineSaveFile)
     return true;
 }
 
-void HFNetRTModel::PrintInputAndOutputsInfo(unique_ptr<INetworkDefinition>& network)
+void NetVladRTModel::PrintInputAndOutputsInfo(unique_ptr<INetworkDefinition>& network)
 {
     std::cout << "model name: " << network->getName() << std::endl;
 
@@ -416,14 +416,14 @@ void HFNetRTModel::PrintInputAndOutputsInfo(unique_ptr<INetworkDefinition>& netw
     }
 }
 
-void HFNetRTModel::Mat2Tensor(const cv::Mat &mat, RTTensor &tensor)
+void NetVladRTModel::Mat2Tensor(const cv::Mat &mat, RTTensor &tensor)
 {
     cv::Mat fromMat(mat.rows, mat.cols, CV_32FC(mat.channels()), 
                     static_cast<float*>(tensor.data));
     mat.convertTo(fromMat, CV_32F);
 }
 
-void HFNetRTModel::Tensor2Mat(const RTTensor &tensor, cv::Mat &mat)
+void NetVladRTModel::Tensor2Mat(const RTTensor &tensor, cv::Mat &mat)
 {
 
     const cv::Mat fromTensor(cv::Size(tensor.shape.d[1], tensor.shape.d[2]), 
@@ -431,7 +431,7 @@ void HFNetRTModel::Tensor2Mat(const RTTensor &tensor, cv::Mat &mat)
     fromTensor.convertTo(mat, CV_32F);
 }
 
-void HFNetRTModel::ResamplerRT(const RTTensor &data, const cv::Mat &warp, cv::Mat &output)
+void NetVladRTModel::ResamplerRT(const RTTensor &data, const cv::Mat &warp, cv::Mat &output)
 {
     const Dims data_shape = data.shape;
     const int batch_size = data_shape.d[0];
@@ -455,4 +455,4 @@ void HFNetRTModel::ResamplerRT(const RTTensor &data, const cv::Mat &warp, cv::Ma
 
 #endif // USE_TENSORRT
 
-} // namespace ORB_SLAM3
+} // namespace DeepRoute

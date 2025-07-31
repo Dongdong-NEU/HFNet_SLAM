@@ -4,13 +4,13 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 enum ModelType {
-    kHFNetTFModel,
-    kHFNetRTModel,
-    kHFNetVINOModel,
+    kNetVladTFModel,
+    kNetVladRTModel,
+    kNetVladVINOModel,
 };
 
 enum ModelDetectionMode {
@@ -74,6 +74,6 @@ void Resampler(const float* data, const float* warp, float* output,
                 const int batch_size, const int data_height, 
                 const int data_width, const int data_channels, const int num_sampling_points);
 
-} // namespace ORB_SLAM3
+} // namespace DeepRoute
 
 #endif

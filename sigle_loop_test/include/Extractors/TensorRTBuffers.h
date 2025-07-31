@@ -29,7 +29,7 @@
 #include <vector>
 #include <algorithm>
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 template <typename A, typename B>
@@ -463,6 +463,6 @@ private:
     std::vector<void*> mDeviceBindings;                          //!< The vector of device buffers needed for engine execution
 };
 
-} // namespace ORB_SLAM3
+} // namespace DeepRoute
 
 #endif // TENSORRT_BUFFERS_H

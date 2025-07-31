@@ -11,7 +11,7 @@
 using namespace cv;
 using namespace std;
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 const int PATCH_SIZE = 31;
@@ -146,7 +146,7 @@ int HFextractor::operator() (const cv::Mat &image, std::vector<cv::KeyPoint>& vK
     if (nlevels == 1) res = ExtractSingleLayer(image, vKeyPoints, localDescriptors, globalDescriptors);
     else 
     {
-        if (mvpModels[0]->Type() == kHFNetVINOModel)
+        if (mvpModels[0]->Type() == kNetVladVINOModel)
             res = ExtractMultiLayers(image, vKeyPoints, localDescriptors, globalDescriptors);
         else
             res = ExtractMultiLayersParallel(image, vKeyPoints, localDescriptors, globalDescriptors);

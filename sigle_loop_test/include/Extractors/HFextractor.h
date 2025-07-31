@@ -1,11 +1,11 @@
-#ifndef HFNETEXTRACTOR_H
-#define HFNETEXTRACTOR_H
+#ifndef NetVladEXTRACTOR_H
+#define NetVladEXTRACTOR_H
 
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include "Extractors/BaseModel.h"
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 class BaseModel;

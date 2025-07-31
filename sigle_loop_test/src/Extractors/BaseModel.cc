@@ -1,11 +1,11 @@
 #include "Extractors/BaseModel.h"
-#include "Extractors/HFNetRTModel.h"
+#include "Extractors/NetVladRTModel.h"
 
 #include <unordered_set>
 
 using namespace std;
 
-namespace ORB_SLAM3
+namespace DeepRoute
 {
 
 std::vector<BaseModel*> gvpModels;
@@ -25,7 +25,7 @@ void InitAllModels(const std::string& strModelPath, ModelType modelType, cv::Siz
         cv::Vec4i inputShape{1, cvRound(ImSize.height * scale), cvRound(ImSize.width * scale), 1};
         BaseModel *pNewModel = nullptr;
         ModelDetectionMode mode;
-        if (modelType == kHFNetRTModel)
+        if (modelType == kNetVladRTModel)
         {
             if (level == 0) mode = kImageToLocalAndGlobal;
             else mode = kImageToLocal;
@@ -43,7 +43,7 @@ void InitAllModels(const std::string& strModelPath, ModelType modelType, cv::Siz
     if (gpGlobalModel) delete gpGlobalModel;
     cv::Vec4i inputShape{1, ImSize.height / 8, ImSize.width / 8, 96};
     BaseModel *pNewModel = nullptr;
-    if (modelType == kHFNetRTModel)
+    if (modelType == kNetVladRTModel)
     {
         pNewModel = nullptr;
     }
@@ -79,10 +79,10 @@ BaseModel* GetGlobalModel(void)
 BaseModel* InitRTModel(const std::string& strModelPath, ModelDetectionMode mode, cv::Vec4i inputShape)
 {
     BaseModel* pModel;
-    pModel = new HFNetRTModel(strModelPath, mode, inputShape);
+    pModel = new NetVladRTModel(strModelPath, mode, inputShape);
     if (pModel->IsValid())
     {
-        cout << "Successfully loaded HFNet TensorRT model."
+        cout << "Successfully loaded NetVlad TensorRT model."
              << " Mode: " << gStrModelDetectionName[mode]
              << " Shape: " << inputShape.t() << endl;
     }
