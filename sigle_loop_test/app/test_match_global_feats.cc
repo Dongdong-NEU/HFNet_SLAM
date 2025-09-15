@@ -73,7 +73,7 @@ int main(int argc, char** argv)
     } else {
         std::cout << "Found " << gtPoses.size() << " ground truth poses in: " << strGTPosesPath << std::endl;
     }
-
+    
     assert(files_front.size() == gtPoses.size());
 
 
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
     int start = 0;
     int end = files_front.size();
 
-    const int step = 10;
+    const int step = 1;
     int nKeyFrame = (end - start) / step;
 
     if (nKeyFrame <= 300) exit(-1);
@@ -154,7 +154,7 @@ int main(int argc, char** argv)
     // 启动Pangolin可视化
     StartVisualization();
 
-    int select = 1200;
+    int select = 0;
     // 模拟定位
     while (1) {
         // 检查暂停状态
@@ -186,6 +186,7 @@ int main(int argc, char** argv)
         std::vector<size_t> valid_indices;
         for (const auto& m : temp_matches) {
             size_t idx = m.first;
+            // TODO: 有了时间限制 id 应该是不需要的
             if (std::abs(timeStamp - vKeyFrameDB[idx]->timeStamp) > time_threshold && 
                 vKeyFrameDB[idx]->mnFrameId < pKFHF->mnFrameId - 300)
                 valid_indices.push_back(idx);
@@ -282,9 +283,9 @@ int main(int argc, char** argv)
             cv::waitKey(500);
             
             // 显示完成后清空窗口
-            cv::Mat blank = cv::Mat::zeros(all.size(), all.type());
-            cv::imshow("Compare Candidates", blank);
-            cv::waitKey(1); // 短暂等待确保窗口更新
+            // cv::Mat blank = cv::Mat::zeros(all.size(), all.type());
+            // cv::imshow("Compare Candidates", blank);
+            // cv::waitKey(1); // 短暂等待确保窗口更新
         }
 
         if (select >= end - 1) {

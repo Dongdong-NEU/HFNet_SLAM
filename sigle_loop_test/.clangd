@@ -1,0 +1,50 @@
+CompileDatabase: build
+
+Diagnostics:
+  ClangTidy:
+    Add: 
+      - readability-*
+      - performance-*
+      - bugprone-*
+    Remove:
+      - readability-magic-numbers
+      - readability-identifier-length
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Hover:
+  ShowAKA: Yes
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+
+Completion:
+  AllScopes: Yes
+
+CompileFlags:
+  Add:
+    # 项目头文件路径
+    - -I/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/include
+    - -I/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/include/Extractors
+    - -I/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test
+    # OpenCV路径
+    - -I/usr/include/opencv4
+    - -I/usr/include/opencv4/opencv2
+    # Eigen3路径
+    - -I/usr/include/eigen3
+    - -I/usr/local/include/eigen3
+    # CUDA路径
+    - -I/usr/local/cuda/include
+    # TensorRT路径（如果存在）
+    - -I/home/xihuidong/usr_lib/TensorRT-8.5.3.1/include
+    # 编译选项
+    - -std=c++14
+    - -DUSE_TENSORRT
+    - -Wall
+    - -fopenmp
+  Remove:
+    - -march=native

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <algorithm>
 #include <limits>
+#include <string>
 
 // GetPngFiles函数实现
 vector<string> GetPngFiles(string strPngDir)
@@ -29,6 +30,30 @@ vector<string> GetPngFiles(string strPngDir)
     return ret;
 }
 
+// {
+// #include <opencv2/core.hpp>
+// #include <iostream>
+
+// cv::Mat LoadGlobalDescriptor(const std::string& path) {
+//     cv::FileStorage fs(path, cv::FileStorage::READ);
+//     if (!fs.isOpened()) {
+//         std::cerr << "Failed to open file: " << path << std::endl;
+//         return cv::Mat();
+//     }
+//     cv::Mat desc;
+//     fs["global_descriptors"] >> desc;
+//     fs.release();
+//     return desc;
+// }
+
+// // 用法
+// std::string front_path = "..."; // 你的bin文件路径
+// cv::Mat global_desc = LoadGlobalDescriptor(front_path);
+// if (!global_desc.empty()) {
+//     std::cout << "desc shape: " << global_desc.rows << " x " << global_desc.cols << std::endl;
+// }
+// }
+
 KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose) {
     mnFrameId = id;
     timeStamp = time_stamp;
@@ -47,6 +72,22 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear
     pModel->Detect(im_rear, vKeyPoints_rear, localDescriptors_rear, mGlobalDescriptors_rear, 1000, 0.01);
     auto rear_end = std::chrono::steady_clock::now();
     auto rear_time = std::chrono::duration_cast<std::chrono::milliseconds>(rear_end - rear_start).count();
+
+    // 将前后帧的全局描述子分别以当前时间戳命名，并保存到
+    string front_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/netvlad/front_globaldes/" + to_string(time_stamp) + ".bin";
+    string rear_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/netvlad/rear_globaldes/" + to_string(time_stamp) + ".bin";
+    cv::FileStorage fs_front(front_path, cv::FileStorage::WRITE);
+    fs_front << "global_descriptors" << mGlobalDescriptors_front;
+    fs_front.release();
+    cv::FileStorage fs_rear(rear_path, cv::FileStorage::WRITE);
+    fs_rear << "global_descriptors" << mGlobalDescriptors_rear;
+    fs_rear.release();
+    string odom_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/netvlad/odom.txt";
+    std::ofstream odom_file(odom_path, std::ios::app);
+    // 将pose转换为四元数，并保存到odom.txt中,time_stamp保留六位小数
+    Eigen::Quaterniond q(pose.block<3,3>(0,0));
+    odom_file << to_string(time_stamp) << " " << pose(0,3) << " " << pose(1,3) << " " << pose(2,3) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+    odom_file.close();
     
     std::cout << "  Front feature extraction: " << front_time << "ms, Rear: " << rear_time << "ms" << std::endl;
 }
