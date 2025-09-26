@@ -76,9 +76,13 @@ int main(int argc, char** argv)
     
     assert(files_front.size() == gtPoses.size());
 
-
-    cv::Vec4i inputShape{1, ImSizeFinal.height, ImSizeFinal.width, 1};
-    auto pModel = InitRTModel(strModelPath, kImageToLocalAndGlobal, inputShape);
+    // cv::Vec4i inputShape{1, ImSizeFinal.height, ImSizeFinal.width, 1};
+    // auto pModel = InitRTModel(strModelPath, kImageToLocalAndGlobal, inputShape);
+    // 初始化EigenPlaces模型
+    // 从模型路径中构建ONNX文件路径和引擎缓存路径
+    std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
+    std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
+    auto pModel = InitEigenPlacesModel(onnx_model_path, engine_cache_path, ImSizeFinal);
 
     int start = 0;
     int end = files_front.size();
@@ -153,6 +157,12 @@ int main(int argc, char** argv)
 
     // 启动Pangolin可视化
     StartVisualization();
+    
+    // 初始化轨迹数据到可视化器
+    if (g_viewer) {
+        g_viewer->UpdateTrajectory(gtPoses);
+        std::cout << "Initialized trajectory with " << gtPoses.size() << " poses" << std::endl;
+    }
 
     int select = 0;
     // 模拟定位
@@ -186,7 +196,7 @@ int main(int argc, char** argv)
         std::vector<size_t> valid_indices;
         for (const auto& m : temp_matches) {
             size_t idx = m.first;
-            // TODO: 有了时间限制 id 应该是不需要的
+            // 真值要求有两个：一个是事件差大于30s, 一个是候选帧的id需要至少与查询帧的id靠后300帧
             if (std::abs(timeStamp - vKeyFrameDB[idx]->timeStamp) > time_threshold && 
                 vKeyFrameDB[idx]->mnFrameId < pKFHF->mnFrameId - 300)
                 valid_indices.push_back(idx);
@@ -293,9 +303,9 @@ int main(int argc, char** argv)
             break;
         }
 
-        // 检测到回环后10s内不在检测
+        // 检测到回环后5s内不在检测
         if(valid_indices.size() >0 && res.size() >= 3){
-            select += 100;
+            select += 50;
         }
     }
 

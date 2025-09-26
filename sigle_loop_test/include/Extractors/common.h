@@ -10,6 +10,9 @@
 #include <opencv2/opencv.hpp>
 #include "../../Thirdparty/nanoflann.hpp"
 #include "../../include/Extractors/HFextractor.h"
+#include "../../EigenPlaces/tensorrt_engine.h"
+#include "../../EigenPlaces/image_processor.h"
+#include "../../include/Extractors/EigenPlacesExtractor.h"
 
 using namespace cv;
 using namespace std;
@@ -27,8 +30,11 @@ struct KeyFrameNetVlad
     double timeStamp;
     Eigen::Matrix4d curPose;
 
-    KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
-    KeyFrameNetVlad(int id ,const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
+    KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose);
+    KeyFrameNetVlad(int id ,const cv::Mat im, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose);
+
+    // KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
+    // KeyFrameNetVlad(int id ,const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
 };
 
 struct TUMTrajectoryData {
@@ -81,6 +87,9 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
 void ShowImageWithText(const string &title, const cv::Mat &image, const string &str);
 
 void LoadConfigYaml(const string &configPath, cv::Size &ImSize);
+
+// EigenPlaces模型初始化函数
+EigenPlacesExtractor* InitEigenPlacesModel(const std::string& onnx_model_path, const std::string& engine_cache_path = "", cv::Size ImSize = cv::Size(512, 512));
 
 
 #endif // COMMON_H

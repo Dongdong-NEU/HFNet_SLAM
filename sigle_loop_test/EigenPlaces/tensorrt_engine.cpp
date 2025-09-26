@@ -368,13 +368,13 @@ bool TensorRTEngine::infer(const std::vector<float>& input_data, std::vector<flo
         // 显式batch模式，需要设置输入形状
         for (int i = 0; i < engine_->getNbBindings(); ++i) {
             if (engine_->bindingIsInput(i)) {
-                // 设置输入维度为 [1, 3, 512, 512]
+                // 设置输入维度为 [1, 3, 480, 640]
                 nvinfer1::Dims input_dims;
                 input_dims.nbDims = 4;
                 input_dims.d[0] = 1;      // batch size
                 input_dims.d[1] = 3;      // channels
-                input_dims.d[2] = 512;    // height
-                input_dims.d[3] = 512;    // width
+                input_dims.d[2] = 480;    // height
+                input_dims.d[3] = 640;    // width
                 
                 if (!context_->setBindingDimensions(i, input_dims)) {
                     std::cerr << "[TensorRT] 设置输入维度失败" << std::endl;

@@ -56,7 +56,7 @@ bool ImageProcessor::preprocessImage(const cv::Mat& image, std::vector<float>& o
     // 5. 转换为CHW格式
     hwcToChw(processed_image, output_data);
     
-    std::cout << "[ImageProcessor] 图像预处理完成, 输出尺寸: " << output_data.size() << std::endl;
+    // std::cout << "[ImageProcessor] 图像预处理完成, 输出尺寸: " << output_data.size() << std::endl;
     return true;
 }
 
@@ -103,8 +103,8 @@ void ImageProcessor::postprocessDescriptor(const std::vector<float>& raw_output,
     }
     norm_check = std::sqrt(norm_check);
     
-    std::cout << "[ImageProcessor] L2归一化完成, 范数: " << norm_check 
-              << " (应该接近1.0)" << std::endl;
+    // std::cout << "[ImageProcessor] L2归一化完成, 范数: " << norm_check 
+    //           << " (应该接近1.0)" << std::endl;
 }
 
 float ImageProcessor::computeCosineSimilarity(const std::vector<float>& desc1, 

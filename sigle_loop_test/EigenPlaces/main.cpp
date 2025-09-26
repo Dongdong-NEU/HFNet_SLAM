@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
         
         // 2. 初始化图像处理器
         std::cout << "步骤2: 初始化图像处理器" << std::endl;
-        ImageProcessor processor(512, 512);  // 固定尺寸 512x512
+        ImageProcessor processor(480, 640);  // 固定尺寸 480x640 (匹配TensorRT引擎输入)
         std::cout << "✓ 图像处理器初始化成功" << std::endl << std::endl;
         
         // 3. 处理地图图像

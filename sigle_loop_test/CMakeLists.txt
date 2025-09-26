@@ -42,11 +42,17 @@ file(GLOB_RECURSE LIBRARY_SOURCES
     "${PROJECT_SOURCE_DIR}/src/*.cc"
 )
 
+# 添加EigenPlaces源文件
+set(EIGENPLACES_SOURCES
+    ${PROJECT_SOURCE_DIR}/EigenPlaces/tensorrt_engine.cpp
+    ${PROJECT_SOURCE_DIR}/EigenPlaces/image_processor.cpp
+)
+
 set(APP_SOURCES
     ${PROJECT_SOURCE_DIR}/app/test_match_global_feats.cc
 )
 
-add_executable(test_match_global_feats ${APP_SOURCES} ${LIBRARY_SOURCES})
+add_executable(test_match_global_feats ${APP_SOURCES} ${LIBRARY_SOURCES} ${EIGENPLACES_SOURCES})
 
 target_link_libraries(test_match_global_feats
     ${OpenCV_LIBS}

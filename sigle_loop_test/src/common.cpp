@@ -54,51 +54,62 @@ vector<string> GetPngFiles(string strPngDir)
 // }
 // }
 
-KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose) {
+KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose) {
     mnFrameId = id;
     timeStamp = time_stamp;
     curPose = pose;
-    vector<cv::KeyPoint> vKeyPoints_front, vKeyPoints_rear;
-    cv::Mat localDescriptors_front, localDescriptors_rear;
     
-    std::cout << "  Processing front image..." << std::endl;
+    std::cout << "  Processing front image with EigenPlaces..." << std::endl;
     auto front_start = std::chrono::steady_clock::now();
-    pModel->Detect(im, vKeyPoints_front, localDescriptors_front, mGlobalDescriptors_front, 1000, 0.01);
+    bool front_success = pModel->ExtractGlobalDescriptor(im, mGlobalDescriptors_front);
     auto front_end = std::chrono::steady_clock::now();
     auto front_time = std::chrono::duration_cast<std::chrono::milliseconds>(front_end - front_start).count();
     
-    std::cout << "  Processing rear image..." << std::endl;
+    if (!front_success) {
+        std::cerr << "Failed to extract global descriptor from front image" << std::endl;
+        mGlobalDescriptors_front = cv::Mat::zeros(1, 2048, CV_32F); // EigenPlaces输出2048维特征
+    }
+    
+    std::cout << "  Processing rear image with EigenPlaces..." << std::endl;
     auto rear_start = std::chrono::steady_clock::now();
-    pModel->Detect(im_rear, vKeyPoints_rear, localDescriptors_rear, mGlobalDescriptors_rear, 1000, 0.01);
+    bool rear_success = pModel->ExtractGlobalDescriptor(im_rear, mGlobalDescriptors_rear);
     auto rear_end = std::chrono::steady_clock::now();
     auto rear_time = std::chrono::duration_cast<std::chrono::milliseconds>(rear_end - rear_start).count();
+    
+    if (!rear_success) {
+        std::cerr << "Failed to extract global descriptor from rear image" << std::endl;
+        mGlobalDescriptors_rear = cv::Mat::zeros(1, 2048, CV_32F); // EigenPlaces输出2048维特征
+    }
 
     // 将前后帧的全局描述子分别以当前时间戳命名，并保存到
-    string front_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/netvlad/front_globaldes/" + to_string(time_stamp) + ".bin";
-    string rear_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/netvlad/rear_globaldes/" + to_string(time_stamp) + ".bin";
+    string front_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/front_globaldes/" + to_string(time_stamp) + ".bin";
+    string rear_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/rear_globaldes/" + to_string(time_stamp) + ".bin";
     cv::FileStorage fs_front(front_path, cv::FileStorage::WRITE);
     fs_front << "global_descriptors" << mGlobalDescriptors_front;
     fs_front.release();
     cv::FileStorage fs_rear(rear_path, cv::FileStorage::WRITE);
     fs_rear << "global_descriptors" << mGlobalDescriptors_rear;
     fs_rear.release();
-    string odom_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/netvlad/odom.txt";
+    string odom_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/odom.txt";
     std::ofstream odom_file(odom_path, std::ios::app);
     // 将pose转换为四元数，并保存到odom.txt中,time_stamp保留六位小数
     Eigen::Quaterniond q(pose.block<3,3>(0,0));
     odom_file << to_string(time_stamp) << " " << pose(0,3) << " " << pose(1,3) << " " << pose(2,3) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
     odom_file.close();
     
-    std::cout << "  Front feature extraction: " << front_time << "ms, Rear: " << rear_time << "ms" << std::endl;
+    std::cout << "  Front EigenPlaces extraction: " << front_time << "ms, Rear: " << rear_time << "ms" << std::endl;
 }
 // 定位用
-KeyFrameNetVlad::KeyFrameNetVlad(int id ,const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose) {
+KeyFrameNetVlad::KeyFrameNetVlad(int id ,const cv::Mat im, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose) {
     mnFrameId = id;
     timeStamp = time_stamp;
     curPose = pose;
-    vector<cv::KeyPoint> vKeyPoints;
-    cv::Mat localDescriptors, intermediate;
-    pModel->Detect(im, vKeyPoints, localDescriptors, mGlobalDescriptors_front, 1000, 0.01);
+    
+    bool success = pModel->ExtractGlobalDescriptor(im, mGlobalDescriptors_front);
+    if (!success) {
+        std::cerr << "Failed to extract global descriptor from image" << std::endl;
+        mGlobalDescriptors_front = cv::Mat::zeros(1, 2048, CV_32F); // EigenPlaces输出2048维特征
+    }
 }
 
 // KITTI时间戳读取
@@ -358,6 +369,7 @@ AlignedDualCameraData AlignDualCameraDataToTrajectory(const string& strDatasetPa
 
 KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB &db, int k, bool &use_rear)
 {
+    // 当前数据库中的全局描述子最少需要100帧
     if (db.front()->mnFrameId >= query->mnFrameId - 100) return KeyFrameDB();
 
     std::vector<KeyFrameNetVlad*> candidates;
@@ -370,12 +382,14 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
     for (auto it = db.begin(); it != db.end(); ++it)
     {
         KeyFrameNetVlad *pKF = *it;
+        // 候选帧的id需要至少与查询帧的id靠后300帧
         if (pKF->mnFrameId > query->mnFrameId - 300) break;
         // 位姿平移距离过滤
         Eigen::Vector3d query_t = query->curPose.block<3,1>(0,3);
         Eigen::Vector3d cand_t = pKF->curPose.block<3,1>(0,3);
         double trans_dist = (query_t - cand_t).norm();
-        if (trans_dist >= 10.0) continue;
+        // 当前帧与候选帧的位姿平移距离需要小于20米
+        if (trans_dist >= 20.0) continue;
 
         Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> const> 
             pKFDescriptors_front(
@@ -454,4 +468,32 @@ void LoadConfigYaml(const string &configPath, cv::Size &ImSize) {
     
     ImSize = cv::Size(width, height);
     fs.release();
+}
+
+// EigenPlaces模型初始化函数实现
+EigenPlacesExtractor* InitEigenPlacesModel(const std::string& onnx_model_path, const std::string& engine_cache_path, cv::Size ImSize) {
+    std::cout << "Initializing EigenPlaces model..." << std::endl;
+    std::cout << "ONNX model path: " << onnx_model_path << std::endl;
+    if (!engine_cache_path.empty()) {
+        std::cout << "Engine cache path: " << engine_cache_path << std::endl;
+    }
+
+    std::cout << "Input image size: " << ImSize.width << "x" << ImSize.height << std::endl;
+    EigenPlacesExtractor* pModel = new EigenPlacesExtractor(onnx_model_path, ImSize, engine_cache_path);
+    
+    if (!pModel->Initialize()) {
+        std::cerr << "Failed to initialize EigenPlaces model" << std::endl;
+        delete pModel;
+        exit(-1);
+    }
+    
+    if (pModel->IsValid()) {
+        std::cout << "Successfully loaded EigenPlaces TensorRT model." << std::endl;
+    } else {
+        std::cerr << "EigenPlaces model is not valid" << std::endl;
+        delete pModel;
+        exit(-1);
+    }
+    
+    return pModel;
 }

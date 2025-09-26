@@ -17,8 +17,8 @@ public:
      * @param mean RGB均值 (ImageNet标准)
      * @param std RGB标准差 (ImageNet标准)
      */
-    ImageProcessor(int input_height = 512, 
-                   int input_width = 512,
+    ImageProcessor(int input_height , 
+                   int input_width  ,
                    const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
                    const std::vector<float>& std = {0.229f, 0.224f, 0.225f});
     

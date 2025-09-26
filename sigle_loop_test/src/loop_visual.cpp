@@ -19,6 +19,15 @@ void TrajectoryViewer::UpdateTrajectory(const std::vector<Eigen::Matrix4d, Eigen
     if (trajectory_.size() != poses.size() || trajectory_ != poses) {
         trajectory_ = poses;
         data_updated_ = true;
+        
+        // 调试输出：轨迹更新信息
+        std::cout << "[TrajectoryViewer] Trajectory updated with " << poses.size() << " poses" << std::endl;
+        if (!poses.empty()) {
+            Eigen::Vector3d first_pos = poses[0].block<3,1>(0,3);
+            Eigen::Vector3d last_pos = poses[poses.size()-1].block<3,1>(0,3);
+            std::cout << "[TrajectoryViewer] First pose: [" << first_pos.transpose() << "]" << std::endl;
+            std::cout << "[TrajectoryViewer] Last pose: [" << last_pos.transpose() << "]" << std::endl;
+        }
     }
 }
 
@@ -83,6 +92,7 @@ void TrajectoryViewer::Run() {
     pangolin::Var<float> menu_point_size("menu.Point Size", 3.0f, 1.0f, 10.0f);
     pangolin::Var<float> menu_line_width("menu.Line Width", 2.0f, 1.0f, 5.0f);
     pangolin::Var<bool> menu_pause("menu.Pause Program", false, true);
+    pangolin::Var<bool> menu_reset_view("menu.Reset View (R)", false, false);
     
     while (!pangolin::ShouldQuit()) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -92,6 +102,39 @@ void TrajectoryViewer::Run() {
         {
             std::lock_guard<std::mutex> lock(data_mutex_);
             is_paused_ = menu_pause;
+        }
+        
+        // 处理复位视图按钮
+        if (pangolin::Pushed(menu_reset_view)) {
+            // 获取轨迹数据来计算边界框
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            if (!trajectory_.empty()) {
+                // 计算轨迹的边界框
+                Eigen::Vector3d min_pt = trajectory_[0].block<3,1>(0,3);
+                Eigen::Vector3d max_pt = trajectory_[0].block<3,1>(0,3);
+                
+                for (const auto& pose : trajectory_) {
+                    Eigen::Vector3d pos = pose.block<3,1>(0,3);
+                    min_pt = min_pt.cwiseMin(pos);
+                    max_pt = max_pt.cwiseMax(pos);
+                }
+                
+                // 计算中心点和缩放
+                Eigen::Vector3d center = (min_pt + max_pt) * 0.5;
+                Eigen::Vector3d range = max_pt - min_pt;
+                double max_range = std::max({range.x(), range.y(), range.z()});
+                double scale = std::max(max_range * 2.0, 10.0); // 确保至少有10米的视野
+                
+                // 重置相机位置
+                s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(
+                    center.x(), center.y() - scale, center.z() + scale * 0.5,  // 相机位置
+                    center.x(), center.y(), center.z(),  // 目标位置
+                    0.0, 0.0, 1.0  // 上向量
+                ));
+                
+                std::cout << "[TrajectoryViewer] View reset - Center: [" << center.transpose() 
+                          << "], Scale: " << scale << std::endl;
+            }
         }
         
         // 设置背景颜色
@@ -147,13 +190,20 @@ void TrajectoryViewer::Run() {
         
         // 绘制轨迹
         if (menu_show_trajectory && !traj_copy.empty()) {
-            glColor3f(0.5f, 0.5f, 0.5f);
-            glLineWidth(menu_line_width);
+            // 使用更亮的颜色和更粗的线条
+            glColor3f(0.8f, 0.8f, 0.8f);  // 更亮的灰色
+            glLineWidth(menu_line_width * 2.0f);  // 更粗的线条
             glBegin(GL_LINE_STRIP);
             for (const auto& pose : traj_copy) {
                 glVertex3f(pose(0,3), pose(1,3), pose(2,3));
             }
             glEnd();
+            
+            // 调试输出：确认轨迹正在绘制
+            static int draw_count = 0;
+            if (++draw_count % 100 == 0) {  // 每100帧输出一次
+                std::cout << "[TrajectoryViewer] Drawing trajectory with " << traj_copy.size() << " points" << std::endl;
+            }
         }
         
         // 绘制关键帧

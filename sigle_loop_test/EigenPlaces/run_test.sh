@@ -19,8 +19,8 @@ if [ ! -f "$EXECUTABLE" ]; then
 fi
 
 # 设置模型和图像路径
-ONNX_MODEL="./ONNX/eigenplaces_resnet50_fixedshape_GPU_simplified.onnx"
-ENGINE_FILE="./ONNX/eigenplaces_resnet50_fixedshape_GPU_simplified.engine"
+ONNX_MODEL="./ONNX/eigenplaces_resnet50_dynamic_batch_simplified.onnx"
+ENGINE_FILE="./ONNX/eigenplaces_resnet50_dynamic_batch_simplified.engine"
 
 # ONNX_MODEL="../models/eigenplaces_resnet50_onnx_fixheightwidth_simplified.onnx"
 # ENGINE_FILE="../models/eigenplaces_resnet50_fixheightwidth_simplified.engine"
