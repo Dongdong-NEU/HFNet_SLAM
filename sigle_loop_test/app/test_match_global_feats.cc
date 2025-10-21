@@ -185,6 +185,9 @@ int main(int argc, char** argv)
 
         KeyFrameNetVlad *pKFHF = new KeyFrameNetVlad(select, image, pModel, timeStamp, pose);
 
+        // 更新Query位置（每次都调用，记录红色点走过的路径）
+        UpdateQueryVisualization(gtPoses, select);
+
         Eigen::Vector3d query_pos = pose.block<3,1>(0,3);
         const double search_radius = 5.0; 
         const double time_threshold = 30.0; 

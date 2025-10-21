@@ -4,7 +4,8 @@
 TrajectoryViewer* g_viewer = nullptr;
 
 // TrajectoryViewer类实现
-TrajectoryViewer::TrajectoryViewer() : current_frame_id_(-1), data_updated_(false), is_paused_(false) {}
+TrajectoryViewer::TrajectoryViewer() : current_frame_id_(-1), data_updated_(false), is_paused_(false), 
+                                       trail_enabled_(false), last_query_frame_id_(-1) {}
 
 // 获取暂停状态
 bool TrajectoryViewer::IsPaused() {
@@ -93,6 +94,8 @@ void TrajectoryViewer::Run() {
     pangolin::Var<float> menu_line_width("menu.Line Width", 2.0f, 1.0f, 5.0f);
     pangolin::Var<bool> menu_pause("menu.Pause Program", false, true);
     pangolin::Var<bool> menu_reset_view("menu.Reset View (R)", false, false);
+    pangolin::Var<bool> menu_show_query_trail("menu.Show Query Points", false, true);
+    pangolin::Var<bool> menu_clear_query_trail("menu.Clear Query Points", false, false);
     
     while (!pangolin::ShouldQuit()) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -137,15 +140,27 @@ void TrajectoryViewer::Run() {
             }
         }
         
+        // 处理Query路径控制按钮
+        static bool last_trail_state = false;
+        if (menu_show_query_trail != last_trail_state) {
+            EnableQueryTrail(menu_show_query_trail);
+            last_trail_state = menu_show_query_trail;
+        }
+        
+        if (pangolin::Pushed(menu_clear_query_trail)) {
+            ClearQueryTrail();
+        }
+        
         // 设置背景颜色
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         
         // 获取数据副本（只在数据更新时）
         std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> traj_copy;
-        std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> kf_copy, kdtree_copy, eigen_copy;
+        std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> kf_copy, kdtree_copy, eigen_copy, query_trail_copy;
         std::vector<float> scores_copy;
         Eigen::Vector3d current_copy;
         int frame_id_copy;
+        bool trail_enabled_copy = false;
         bool has_new_data = false;
         
         {
@@ -158,6 +173,8 @@ void TrajectoryViewer::Run() {
                 scores_copy = eigen_scores_;
                 current_copy = current_position_;
                 frame_id_copy = current_frame_id_;
+                query_trail_copy = query_trail_;
+                trail_enabled_copy = trail_enabled_;
                 data_updated_ = false;
                 has_new_data = true;
             }
@@ -165,10 +182,11 @@ void TrajectoryViewer::Run() {
         
         // 如果没有新数据，使用上一次的数据
         static std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> last_traj_copy;
-        static std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> last_kf_copy, last_kdtree_copy, last_eigen_copy;
+        static std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> last_kf_copy, last_kdtree_copy, last_eigen_copy, last_query_trail_copy;
         static std::vector<float> last_scores_copy;
         static Eigen::Vector3d last_current_copy;
         static int last_frame_id_copy = -1;
+        static bool last_trail_enabled_copy = false;
         
         if (has_new_data) {
             last_traj_copy = traj_copy;
@@ -178,6 +196,8 @@ void TrajectoryViewer::Run() {
             last_scores_copy = scores_copy;
             last_current_copy = current_copy;
             last_frame_id_copy = frame_id_copy;
+            last_query_trail_copy = query_trail_copy;
+            last_trail_enabled_copy = trail_enabled_copy;
         } else {
             traj_copy = last_traj_copy;
             kf_copy = last_kf_copy;
@@ -186,6 +206,8 @@ void TrajectoryViewer::Run() {
             scores_copy = last_scores_copy;
             current_copy = last_current_copy;
             frame_id_copy = last_frame_id_copy;
+            query_trail_copy = last_query_trail_copy;
+            trail_enabled_copy = last_trail_enabled_copy;
         }
         
         // 绘制轨迹
@@ -224,6 +246,23 @@ void TrajectoryViewer::Run() {
             glBegin(GL_POINTS);
             glVertex3f(current_copy.x(), current_copy.y(), current_copy.z());
             glEnd();
+        }
+        
+        // 绘制Query帧路径（黄色点）
+        if (menu_show_query_trail && trail_enabled_copy && !query_trail_copy.empty()) {
+            glColor3f(1.0f, 1.0f, 0.0f);  // 黄色
+            glPointSize(menu_point_size * 1.5f);  // 稍大的点
+            glBegin(GL_POINTS);
+            for (const auto& pos : query_trail_copy) {
+                glVertex3f(pos.x(), pos.y(), pos.z());
+            }
+            glEnd();
+            
+            // 调试输出：确认Query路径正在绘制
+            static int query_draw_count = 0;
+            if (++query_draw_count % 200 == 0) {  // 每200帧输出一次
+                std::cout << "[TrajectoryViewer] Drawing query trail with " << query_trail_copy.size() << " yellow points" << std::endl;
+            }
         }
         
         // 绘制Eigen候选帧（先绘制，避免被KDTree线条覆盖）
@@ -357,5 +396,66 @@ void UpdateVisualization(const std::vector<Eigen::Matrix4d, Eigen::aligned_alloc
         }
         
         g_viewer->UpdateLoopDetection(queryFrameId, current_pos, kdtree_positions, eigen_positions, scores);
+    }
+}
+
+// Query路径管理方法
+void TrajectoryViewer::EnableQueryTrail(bool enable) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    trail_enabled_ = enable;
+    if (!enable) {
+        query_trail_.clear();
+        last_query_frame_id_ = -1;
+    }
+    data_updated_ = true;
+    std::cout << "[TrajectoryViewer] Query trail " << (enable ? "enabled" : "disabled") << std::endl;
+}
+
+void TrajectoryViewer::ClearQueryTrail() {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    query_trail_.clear();
+    last_query_frame_id_ = -1;
+    data_updated_ = true;
+    std::cout << "[TrajectoryViewer] Query trail cleared" << std::endl;
+}
+
+bool TrajectoryViewer::IsQueryTrailEnabled() {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    return trail_enabled_;
+}
+
+void TrajectoryViewer::UpdateQueryPosition(int frame_id, const Eigen::Vector3d& current_pos) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    current_frame_id_ = frame_id;
+    current_position_ = current_pos;
+    
+    // 记录Query帧路径
+    if (trail_enabled_ && frame_id > last_query_frame_id_) {
+        query_trail_.push_back(current_pos);
+        last_query_frame_id_ = frame_id;
+        
+        // 限制路径长度，避免内存过多占用
+        if (query_trail_.size() > 10000) {
+            query_trail_.erase(query_trail_.begin(), query_trail_.begin() + 1000);
+        }
+        
+        // 调试输出：每50个点输出一次
+        if (query_trail_.size() % 50 == 0) {
+            std::cout << "[TrajectoryViewer] Query trail now has " << query_trail_.size() << " points" << std::endl;
+        }
+    }
+    
+    data_updated_ = true;
+}
+
+// 专门用于更新Query位置的函数
+void UpdateQueryVisualization(const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses,
+                             int queryFrameId) {
+    if (!g_viewer) return;
+    
+    if (queryFrameId < poses.size()) {
+        // 当前query位置
+        Eigen::Vector3d current_pos = poses[queryFrameId].block<3,1>(0,3);
+        g_viewer->UpdateQueryPosition(queryFrameId, current_pos);
     }
 }

@@ -23,6 +23,11 @@ private:
     bool is_paused_;
     std::mutex data_mutex_;
     
+    // Query帧路径追踪
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> query_trail_;
+    bool trail_enabled_;
+    int last_query_frame_id_;
+    
 public:
     TrajectoryViewer();
     
@@ -41,6 +46,12 @@ public:
                            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>& eigen_cands,
                            const std::vector<float>& scores);
     
+    // Query路径管理
+    void EnableQueryTrail(bool enable);
+    void ClearQueryTrail();
+    bool IsQueryTrailEnabled();
+    void UpdateQueryPosition(int frame_id, const Eigen::Vector3d& current_pos);
+    
     // 主可视化循环
     void Run();
 };
@@ -53,5 +64,7 @@ void StartVisualization();
 void UpdateVisualization(const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses,
                         int queryFrameId, const KeyFrameDB& loopCandidates,
                         const std::vector<size_t>& kdtreeCandidates, const KeyFrameDB& keyFrameDB);
+void UpdateQueryVisualization(const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses,
+                             int queryFrameId);
 
 #endif // LOOP_VISUAL_H
