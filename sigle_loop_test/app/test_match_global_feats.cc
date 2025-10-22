@@ -183,6 +183,8 @@ int main(int argc, char** argv)
     }
 
     int select = 0;
+    bool show_undistort = false;
+    std::cout << "Show undistort: " << show_undistort << std::endl;
     // 模拟定位
     while (1) {
         // 检查暂停状态
@@ -198,12 +200,14 @@ int main(int argc, char** argv)
 
         KeyFrameNetVlad *pKFHF = nullptr;
         cv::Mat image_show;
+        cv::Mat image_show_undistort;
         
         if (use_offline_descriptor) {
             // 使用离线描述子模式（仅前目）
             pKFHF = new KeyFrameNetVlad(select, timeStamp, pose, strOfflineDescriptorPath, true);
             // 仍然需要加载图像用于可视化
             image_show = imread(strDatasetPath_front + files_front[select], IMREAD_COLOR);
+            image_show_undistort = image_show.clone();
             if (!image_show.empty()) {
                 image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
             }
@@ -212,6 +216,7 @@ int main(int argc, char** argv)
             cv::Mat image = imread(strDatasetPath_front + files_front[select], IMREAD_GRAYSCALE);
             image = UndistortImage(image, camera1.first, camera1.second, camParams1, ImSizeFinal);
             image_show = imread(strDatasetPath_front + files_front[select], IMREAD_COLOR);
+            image_show_undistort = image_show.clone();
             image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
             pKFHF = new KeyFrameNetVlad(select, image, pModel, timeStamp, pose);
         }
@@ -273,7 +278,11 @@ int main(int argc, char** argv)
             if (i < valid_indices.size()) {
                 int kf_idx = valid_indices[i];
                 imgs[1+i] = imread(strDatasetPath + files[vKeyFrameDB[kf_idx]->mnFrameId], IMREAD_COLOR);
-                imgs[1+i] = UndistortImage(imgs[1+i], camera1.first, camera1.second, camParams1, ImSizeFinal);
+                if(show_undistort){
+                    imgs[1+i] = UndistortImage(imgs[1+i], camera1.first, camera1.second, camParams1, ImSizeFinal);
+                }else{
+                    cv::resize(imgs[1+i], imgs[1+i], ImSizeFinal);
+                }
                 texts[1+i] = "KDTree " + std::to_string(i+1) + ": " + std::to_string((int)vKeyFrameDB[kf_idx]->mnFrameId) + ", t=" + std::to_string(vKeyFrameDB[kf_idx]->timeStamp);
             } else {
                 imgs[1+i] = cv::Mat::zeros(ImSizeFinal, CV_8UC3);
@@ -287,13 +296,21 @@ int main(int argc, char** argv)
                 if(use_rear){
                     score = res[i]->mPlaceRecognitionScore_rear;
                     imgs[4+i] = imread(strDatasetPath + files[res[i]->mnFrameId], IMREAD_COLOR);
-                    imgs[4+i] = UndistortImage(imgs[4+i], camera2.first, camera2.second, camParams2, ImSizeFinal);
+                    if(show_undistort){
+                        imgs[4+i] = UndistortImage(imgs[4+i], camera2.first, camera2.second, camParams2, ImSizeFinal);
+                    }else{
+                        cv::resize(imgs[4+i], imgs[4+i], ImSizeFinal);
+                    }
                     texts[4+i] = "Eigen Rear " + std::to_string(i+1) + ": " + std::to_string((int)res[i]->mnFrameId) + ", score=" + std::to_string(score);
                 }else{
                     score = res[i]->mPlaceRecognitionScore_front;
                     imgs[4+i] = imread(strDatasetPath + files[res[i]->mnFrameId], IMREAD_COLOR);
-                    imgs[4+i] = UndistortImage(imgs[4+i], camera1.first, camera1.second, camParams1, ImSizeFinal);
-                    texts[4+i] = "Eigen " + std::to_string(i+1) + ": " + std::to_string((int)res[i]->mnFrameId) + ", score=" + std::to_string(score);
+                    if(show_undistort){
+                        imgs[4+i] = UndistortImage(imgs[4+i], camera1.first, camera1.second, camParams1, ImSizeFinal);
+                    }else{
+                        cv::resize(imgs[4+i], imgs[4+i], ImSizeFinal);
+                    }
+                    texts[4+i] = "Eigen Front " + std::to_string(i+1) + ": " + std::to_string((int)res[i]->mnFrameId) + ", score=" + std::to_string(score);
                 }
                 
             } else {
@@ -308,17 +325,18 @@ int main(int argc, char** argv)
         }
         
         // 拼接图像
-        cv::Mat left = imgs[0];
+        cv::Mat left_all;
+        cv::Mat left_distort = imgs[0];
+        cv::Mat left_undistort;
+        cv::resize(image_show_undistort, left_undistort, ImSizeFinal);
+        cv::vconcat(std::vector<cv::Mat>{left_distort, left_undistort}, left_all);
+
         cv::Mat right_row1, right_row2, right_all, all;
         cv::hconcat(std::vector<cv::Mat>{imgs[1], imgs[2], imgs[3]}, right_row1);
         cv::hconcat(std::vector<cv::Mat>{imgs[4], imgs[5], imgs[6]}, right_row2);
         cv::vconcat(right_row1, right_row2, right_all);
         
-        if (left.rows < right_all.rows) {
-            int pad = right_all.rows - left.rows;
-            cv::copyMakeBorder(left, left, 0, pad, 0, 0, cv::BORDER_CONSTANT, cv::Scalar(0,0,0));
-        }
-        cv::hconcat(std::vector<cv::Mat>{left, right_all}, all);
+        cv::hconcat(std::vector<cv::Mat>{left_all, right_all}, all);
         cv::namedWindow("Compare Candidates", cv::WINDOW_NORMAL);
         cv::resizeWindow("Compare Candidates", 1280, 720);
         
