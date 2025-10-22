@@ -2,6 +2,7 @@
 #include <fstream>
 #include <opencv2/core/types.hpp>
 #include <sstream>
+#include <iomanip>
 #include <dirent.h>
 #include <iostream>
 #include <algorithm>
@@ -401,10 +402,10 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
                 pKF->mGlobalDescriptors_rear.cols);
         pKF->mPlaceRecognitionScore_front = (queryDescriptors - pKFDescriptors_front).norm();
         pKF->mPlaceRecognitionScore_rear = (queryDescriptors - pKFDescriptors_rear).norm();
-        if (pKF->mPlaceRecognitionScore_front < 0.8){
+        if (pKF->mPlaceRecognitionScore_front < 0.7){
             candidates_front.push_back(pKF);
         }
-        if (pKF->mPlaceRecognitionScore_rear < 0.8) {
+        if (pKF->mPlaceRecognitionScore_rear < 0.7) {
             candidates_rear.push_back(pKF);
         }
     }
@@ -496,4 +497,91 @@ EigenPlacesExtractor* InitEigenPlacesModel(const std::string& onnx_model_path, c
     }
     
     return pModel;
+}
+
+// 从离线描述子文件加载的构造函数实现（双相机）
+KeyFrameNetVlad::KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, const string& descriptor_path) {
+    mnFrameId = id;
+    timeStamp = time_stamp;
+    curPose = pose;
+    
+    // 根据时间戳构建.bin文件路径
+    // 格式: save_nn_internal_output_perception_subgraph__vpr_head_nn_output_0_2x2048_f32_<timestamp>.bin
+    // 时间戳格式：原始时间戳 * 10，保留1位小数精度 (例如: 1747822563.93 -> 17478225639)
+    std::ostringstream oss;
+    long long timestamp_int = static_cast<long long>(time_stamp * 10.0);
+    oss << timestamp_int;
+    string timestamp_str = oss.str();
+    string bin_file = descriptor_path + "/save_nn_internal_output_perception_subgraph__vpr_head_nn_output_0_2x2048_f32_" + timestamp_str + ".bin";
+    
+    // 加载离线描述子
+    if (!LoadOfflineDescriptor(bin_file, mGlobalDescriptors_front, mGlobalDescriptors_rear)) {
+        std::cerr << "Failed to load offline descriptor from: " << bin_file << std::endl;
+        // 使用零矩阵作为默认值
+        mGlobalDescriptors_front = cv::Mat::zeros(1, 2048, CV_32F);
+        mGlobalDescriptors_rear = cv::Mat::zeros(1, 2048, CV_32F);
+    } else {
+        std::cout << "Successfully loaded offline descriptor for timestamp: " << time_stamp << std::endl;
+    }
+}
+
+// 从离线描述子文件加载的构造函数实现（单相机，仅前目）
+KeyFrameNetVlad::KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, const string& descriptor_path, bool front_only) {
+    mnFrameId = id;
+    timeStamp = time_stamp;
+    curPose = pose;
+    
+    // 根据时间戳构建.bin文件路径
+    // 格式: save_nn_internal_output_perception_subgraph__vpr_head_nn_output_0_2x2048_f32_<timestamp>.bin
+    // 时间戳格式：原始时间戳 * 10，保留1位小数精度 (例如: 1747822563.93 -> 17478225639)
+    std::ostringstream oss;
+    long long timestamp_int = static_cast<long long>(time_stamp * 10.0);
+    oss << timestamp_int;
+    string timestamp_str = oss.str();
+    string bin_file = descriptor_path + "/save_nn_internal_output_perception_subgraph__vpr_head_nn_output_0_2x2048_f32_" + timestamp_str + ".bin";
+    
+    // 加载离线描述子
+    cv::Mat temp_rear;
+    if (!LoadOfflineDescriptor(bin_file, mGlobalDescriptors_front, temp_rear)) {
+        std::cerr << "Failed to load offline descriptor from: " << bin_file << std::endl;
+        // 使用零矩阵作为默认值
+        mGlobalDescriptors_front = cv::Mat::zeros(1, 2048, CV_32F);
+    } else {
+        std::cout << "Successfully loaded offline descriptor (front only) for timestamp: " << time_stamp << std::endl;
+    }
+    // 单相机模式不使用后目描述子
+}
+
+// 离线描述子加载函数实现
+bool LoadOfflineDescriptor(const string& bin_file_path, cv::Mat& descriptor_front, cv::Mat& descriptor_rear) {
+    std::ifstream file(bin_file_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Cannot open bin file: " << bin_file_path << std::endl;
+        return false;
+    }
+    
+    // 读取2x2048的float32数据
+    const int batch_size = 2;
+    const int feature_dim = 2048;
+    const int total_floats = batch_size * feature_dim;
+    
+    std::vector<float> data(total_floats);
+    file.read(reinterpret_cast<char*>(data.data()), total_floats * sizeof(float));
+    
+    if (!file) {
+        std::cerr << "Failed to read data from bin file: " << bin_file_path << std::endl;
+        file.close();
+        return false;
+    }
+    file.close();
+    
+    // batch0是前目图像的全局描述子
+    descriptor_front = cv::Mat(1, feature_dim, CV_32F);
+    memcpy(descriptor_front.ptr<float>(), data.data(), feature_dim * sizeof(float));
+    
+    // batch1是后目的全局描述子
+    descriptor_rear = cv::Mat(1, feature_dim, CV_32F);
+    memcpy(descriptor_rear.ptr<float>(), data.data() + feature_dim, feature_dim * sizeof(float));
+    
+    return true;
 }

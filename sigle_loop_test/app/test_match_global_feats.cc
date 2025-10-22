@@ -22,8 +22,9 @@ int main(int argc, char** argv)
 {
     Eigen::setNbThreads(std::max(Eigen::nbThreads() / 2, 1));
 
-    if (argc != 7) {
-        std::cerr << std::endl << "Usage: test_match_global_feats dataset_front dataset_rear path_to_model  gt_poses camera_cfg" << std::endl;
+    if (argc != 7 && argc != 8) {
+        std::cerr << std::endl << "Usage: test_match_global_feats dataset_front dataset_rear path_to_model gt_poses camera_cfg config_yaml [offline_descriptor_path]" << std::endl;
+        std::cerr << "If offline_descriptor_path is provided, will load pre-computed descriptors instead of running inference" << std::endl;
         return -1;
     }
 
@@ -33,6 +34,10 @@ int main(int argc, char** argv)
     const string strGTPosesPath = string(argv[4]);
     const string strCamerasCfgPath = string(argv[5]);
     const string strConfigYamlpath = string(argv[6]);
+    
+    // 离线描述子路径（可选）
+    bool use_offline_descriptor = (argc == 8);
+    string strOfflineDescriptorPath = use_offline_descriptor ? string(argv[7]) : "";
 
     vector<string> files_front, files_rear;
     vector<double> times;
@@ -76,13 +81,16 @@ int main(int argc, char** argv)
     
     assert(files_front.size() == gtPoses.size());
 
-    // cv::Vec4i inputShape{1, ImSizeFinal.height, ImSizeFinal.width, 1};
-    // auto pModel = InitRTModel(strModelPath, kImageToLocalAndGlobal, inputShape);
-    // 初始化EigenPlaces模型
-    // 从模型路径中构建ONNX文件路径和引擎缓存路径
-    std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
-    std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
-    auto pModel = InitEigenPlacesModel(onnx_model_path, engine_cache_path, ImSizeFinal);
+    // 初始化EigenPlaces模型（仅在不使用离线描述子时需要）
+    EigenPlacesExtractor* pModel = nullptr;
+    if (!use_offline_descriptor) {
+        std::cout << "Initializing EigenPlaces model for online inference..." << std::endl;
+        std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
+        std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
+        pModel = InitEigenPlacesModel(onnx_model_path, engine_cache_path, ImSizeFinal);
+    } else {
+        std::cout << "Using offline descriptors from: " << strOfflineDescriptorPath << std::endl;
+    }
 
     int start = 0;
     int end = files_front.size();
@@ -105,40 +113,50 @@ int main(int argc, char** argv)
     while (cur < end) {
         int select = cur;
         
-        string front_path = strDatasetPath_front + files_front[select];
-        string rear_path = strDatasetPath_rear + files_rear[select];
-        std::cout << "Loading: " << front_path << std::endl;
-        std::cout << "Loading: " << rear_path << std::endl;
+        KeyFrameNetVlad *pKFHF = nullptr;
+        
+        if (use_offline_descriptor) {
+            // 使用离线描述子模式
+            auto load_start = chrono::steady_clock::now();
+            pKFHF = new KeyFrameNetVlad(select, times[select], gtPoses[select], strOfflineDescriptorPath);
+            auto load_end = chrono::steady_clock::now();
+            auto load_time = chrono::duration_cast<chrono::milliseconds>(load_end - load_start).count();
+            
+            std::cout << "Frame " << select << " - Offline descriptor loading: " << load_time << "ms" << std::endl;
+        } else {
+            // 在线提取特征模式
+            string front_path = strDatasetPath_front + files_front[select];
+            string rear_path = strDatasetPath_rear + files_rear[select];
+            std::cout << "Loading: " << front_path << std::endl;
+            std::cout << "Loading: " << rear_path << std::endl;
 
-        auto img_start = chrono::steady_clock::now();
-        cv::Mat image_front = imread(front_path, IMREAD_GRAYSCALE);
-        if (!image_front.empty()) {
-            image_front = UndistortImage(image_front, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            auto img_start = chrono::steady_clock::now();
+            cv::Mat image_front = imread(front_path, IMREAD_GRAYSCALE);
+            if (!image_front.empty()) {
+                image_front = UndistortImage(image_front, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            }
+            cv::Mat image_rear = imread(rear_path, IMREAD_GRAYSCALE);
+            if (!image_rear.empty()) {
+                image_rear = UndistortImage(image_rear, camera2.first, camera2.second, camParams2, ImSizeFinal);
+            }
+            auto img_end = chrono::steady_clock::now();
+            auto img_time = chrono::duration_cast<chrono::milliseconds>(img_end - img_start).count();
+            
+            if (image_front.empty() || image_rear.empty()) {
+                std::cerr << "Failed to load images at frame " << select << std::endl;
+                std::cerr << "Front path: " << front_path << std::endl;
+                std::cerr << "Rear path: " << rear_path << std::endl;
+                cur += step;
+                continue;
+            }
+            
+            auto feat_start = chrono::steady_clock::now();
+            pKFHF = new KeyFrameNetVlad(select, image_front, image_rear, pModel, times[select], gtPoses[select]);
+            auto feat_end = chrono::steady_clock::now();
+            auto feat_time = chrono::duration_cast<chrono::milliseconds>(feat_end - feat_start).count();
+            
+            std::cout << "Frame " << select << " - Image loading: " << img_time << "ms, Feature extraction: " << feat_time << "ms" << std::endl;
         }
-        cv::Mat image_rear = imread(rear_path, IMREAD_GRAYSCALE);
-        if (!image_rear.empty()) {
-            image_rear = UndistortImage(image_rear, camera2.first, camera2.second, camParams2, ImSizeFinal);
-        }
-        // cv::imshow("Image Front", image_front);
-        // cv::imshow("Image Rear", image_rear);
-        // cv::waitKey(0);
-        auto img_end = chrono::steady_clock::now();
-        auto img_time = chrono::duration_cast<chrono::milliseconds>(img_end - img_start).count();
-        
-        if (image_front.empty() || image_rear.empty()) {
-            std::cerr << "Failed to load images at frame " << select << std::endl;
-            std::cerr << "Front path: " << front_path << std::endl;
-            std::cerr << "Rear path: " << rear_path << std::endl;
-            cur += step;
-            continue;
-        }
-        
-        auto feat_start = chrono::steady_clock::now();
-        KeyFrameNetVlad *pKFHF = new KeyFrameNetVlad(select, image_front, image_rear, pModel, times[select], gtPoses[select]);
-        auto feat_end = chrono::steady_clock::now();
-        auto feat_time = chrono::duration_cast<chrono::milliseconds>(feat_end - feat_start).count();
-        
-        std::cout << "Frame " << select << " - Image loading: " << img_time << "ms, Feature extraction: " << feat_time << "ms" << std::endl;
         
         vKeyFrameDB.emplace_back(pKFHF);
         Eigen::Vector3d pos = gtPoses[select].block<3,1>(0,3);
@@ -175,15 +193,28 @@ int main(int argc, char** argv)
         
         select++;
 
-        cv::Mat image = imread(strDatasetPath_front + files_front[select], IMREAD_GRAYSCALE);
-        image = UndistortImage(image, camera1.first, camera1.second, camParams1, ImSizeFinal);
-        cv::Mat image_show = imread(strDatasetPath_front + files_front[select], IMREAD_COLOR);
-        image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
-
         double timeStamp = times[select];
         Eigen::Matrix4d pose = gtPoses[select];
 
-        KeyFrameNetVlad *pKFHF = new KeyFrameNetVlad(select, image, pModel, timeStamp, pose);
+        KeyFrameNetVlad *pKFHF = nullptr;
+        cv::Mat image_show;
+        
+        if (use_offline_descriptor) {
+            // 使用离线描述子模式（仅前目）
+            pKFHF = new KeyFrameNetVlad(select, timeStamp, pose, strOfflineDescriptorPath, true);
+            // 仍然需要加载图像用于可视化
+            image_show = imread(strDatasetPath_front + files_front[select], IMREAD_COLOR);
+            if (!image_show.empty()) {
+                image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            }
+        } else {
+            // 在线提取特征模式
+            cv::Mat image = imread(strDatasetPath_front + files_front[select], IMREAD_GRAYSCALE);
+            image = UndistortImage(image, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            image_show = imread(strDatasetPath_front + files_front[select], IMREAD_COLOR);
+            image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            pKFHF = new KeyFrameNetVlad(select, image, pModel, timeStamp, pose);
+        }
 
         // 更新Query位置（每次都调用，记录红色点走过的路径）
         UpdateQueryVisualization(gtPoses, select);

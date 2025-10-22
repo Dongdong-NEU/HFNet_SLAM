@@ -32,6 +32,10 @@ struct KeyFrameNetVlad
 
     KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose);
     KeyFrameNetVlad(int id ,const cv::Mat im, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose);
+    // 从离线描述子文件加载的构造函数（双相机）
+    KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, const string& descriptor_path);
+    // 从离线描述子文件加载的构造函数（单相机，仅前目）
+    KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, const string& descriptor_path, bool front_only);
 
     // KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
     // KeyFrameNetVlad(int id ,const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
@@ -90,6 +94,9 @@ void LoadConfigYaml(const string &configPath, cv::Size &ImSize);
 
 // EigenPlaces模型初始化函数
 EigenPlacesExtractor* InitEigenPlacesModel(const std::string& onnx_model_path, const std::string& engine_cache_path = "", cv::Size ImSize = cv::Size(512, 512));
+
+// 离线描述子加载函数
+bool LoadOfflineDescriptor(const string& bin_file_path, cv::Mat& descriptor_front, cv::Mat& descriptor_rear);
 
 
 #endif // COMMON_H
