@@ -47,12 +47,12 @@ int main(int argc, char** argv)
     LoadConfigYaml(strConfigYamlpath, ImSizeFinal);
 
     FisheyeCameraParams camParams1, camParams2;
-    if (!LoadFisheyeCameraParams(strCamerasCfgPath, "panoramic_1", camParams1)) {
+    if (!LoadFisheyeCameraParams(strCamerasCfgPath, "camera_1", camParams1)) {
         std::cerr << "Failed to load camera intrinsics for panoramic_1 from: " << strCamerasCfgPath << std::endl;
         return -1;
     }
-    if (!LoadFisheyeCameraParams(strCamerasCfgPath, "panoramic_2", camParams2)) {
-        std::cerr << "Failed to load camera intrinsics for panoramic_2 from: " << strCamerasCfgPath << std::endl;
+    if (!LoadFisheyeCameraParams(strCamerasCfgPath, "camera_4", camParams2)) {
+        std::cerr << "Failed to load camera intrinsics for panoramic_3 from: " << strCamerasCfgPath << std::endl;
         return -1;
     }
     pair<cv::Mat, cv::Mat> camera1 = UndistortFisheyeParam(camParams1);

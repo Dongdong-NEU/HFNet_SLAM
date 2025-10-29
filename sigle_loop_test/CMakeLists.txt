@@ -52,6 +52,12 @@ set(APP_SOURCES
     ${PROJECT_SOURCE_DIR}/app/test_match_global_feats.cc
 )
 
+set(TEST_DISTORT_SOURCES
+    ${PROJECT_SOURCE_DIR}/app/test_distort_image.cpp
+    ${PROJECT_SOURCE_DIR}/src/fisheye_utils.cpp
+)
+
+# 主程序：test_match_global_feats
 add_executable(test_match_global_feats ${APP_SOURCES} ${LIBRARY_SOURCES} ${EIGENPLACES_SOURCES})
 
 target_link_libraries(test_match_global_feats
@@ -68,7 +74,15 @@ if(${USE_TENSORRT})
     )
 endif()
 
-install(TARGETS test_match_global_feats DESTINATION bin)
+# 图像去畸变测试程序：test_distort_image
+add_executable(test_distort_image ${TEST_DISTORT_SOURCES})
+
+target_link_libraries(test_distort_image
+    ${OpenCV_LIBS}
+    ${EIGEN3_LIBS}
+)
+
+install(TARGETS test_match_global_feats test_distort_image DESTINATION bin)
 
 message(STATUS "===============================================")
 message(STATUS "Project: ${PROJECT_NAME}")
