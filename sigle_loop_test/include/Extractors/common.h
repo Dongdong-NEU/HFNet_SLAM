@@ -21,6 +21,8 @@ using namespace DeepRoute;
 
 vector<string> GetPngFiles(string strPngDir);
 
+cv::Mat CropImage(const cv::Mat& image, int x, int y, int width, int height);
+
 struct KeyFrameNetVlad
 {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

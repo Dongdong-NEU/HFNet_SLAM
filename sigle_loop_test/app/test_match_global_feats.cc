@@ -39,6 +39,8 @@ int main(int argc, char** argv)
     bool use_offline_descriptor = (argc == 8);
     string strOfflineDescriptorPath = use_offline_descriptor ? string(argv[7]) : "";
 
+    const bool crop_enabled = true;
+
     vector<string> files_front, files_rear;
     vector<double> times;
     std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>> gtPoses;
@@ -87,6 +89,8 @@ int main(int argc, char** argv)
         std::cout << "Initializing EigenPlaces model for online inference..." << std::endl;
         std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
         std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
+        // std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_fixedshape_360_640_GPU_simplified.onnx";
+        // std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_fixedshape_360_640_GPU_simplified.engine";
         pModel = InitEigenPlacesModel(onnx_model_path, engine_cache_path, ImSizeFinal);
     } else {
         std::cout << "Using offline descriptors from: " << strOfflineDescriptorPath << std::endl;
@@ -132,12 +136,18 @@ int main(int argc, char** argv)
 
             auto img_start = chrono::steady_clock::now();
             cv::Mat image_front = imread(front_path, IMREAD_GRAYSCALE);
-            if (!image_front.empty()) {
+            if (!image_front.empty() && !crop_enabled) {
                 image_front = UndistortImage(image_front, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            }else if (!image_front.empty() && crop_enabled) {
+                std::cout << "Cropping front image" << std::endl;
+                image_front = CropImage(image_front, 960,0,1920,1440);
             }
+
             cv::Mat image_rear = imread(rear_path, IMREAD_GRAYSCALE);
-            if (!image_rear.empty()) {
+            if (!image_rear.empty() && !crop_enabled) {
                 image_rear = UndistortImage(image_rear, camera2.first, camera2.second, camParams2, ImSizeFinal);
+            }else if (!image_rear.empty() && crop_enabled) {
+                image_rear = CropImage(image_rear, 480,0,960,720);
             }
             auto img_end = chrono::steady_clock::now();
             auto img_time = chrono::duration_cast<chrono::milliseconds>(img_end - img_start).count();
@@ -212,12 +222,22 @@ int main(int argc, char** argv)
                 image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
             }
         } else {
-            // 在线提取特征模式
+            // 在线提取特征模式 
             cv::Mat image = imread(strDatasetPath_front + files_front[select], IMREAD_GRAYSCALE);
-            image = UndistortImage(image, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            if (!image.empty() && !crop_enabled) {
+                image = UndistortImage(image, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            }else if (!image.empty() && crop_enabled) {
+                image = CropImage(image, 960,0,1920,1440);
+            }
+
             image_show = imread(strDatasetPath_front + files_front[select], IMREAD_COLOR);
             image_show_undistort = image_show.clone();
+
+            if (!image_show.empty() && !crop_enabled) {
             image_show = UndistortImage(image_show, camera1.first, camera1.second, camParams1, ImSizeFinal);
+            }else if (!image_show.empty() && crop_enabled) {
+                image_show = CropImage(image_show, 960,0,1920,1440);
+            }
             pKFHF = new KeyFrameNetVlad(select, image, pModel, timeStamp, pose);
         }
 
@@ -278,9 +298,15 @@ int main(int argc, char** argv)
             if (i < valid_indices.size()) {
                 int kf_idx = valid_indices[i];
                 imgs[1+i] = imread(strDatasetPath + files[vKeyFrameDB[kf_idx]->mnFrameId], IMREAD_COLOR);
-                if(show_undistort){
+                if(show_undistort && !crop_enabled){
+                    // 使用去畸变模式且不使用裁剪模式
                     imgs[1+i] = UndistortImage(imgs[1+i], camera1.first, camera1.second, camParams1, ImSizeFinal);
-                }else{
+                }else if (!crop_enabled){
+                    // 不使用去畸变模式且不使用裁剪模式
+                    cv::resize(imgs[1+i], imgs[1+i], ImSizeFinal);
+                }else if (crop_enabled) {
+                    // 使用裁剪模式
+                    imgs[1+i] = CropImage(imgs[1+i], 960,0,1920,1440);
                     cv::resize(imgs[1+i], imgs[1+i], ImSizeFinal);
                 }
                 texts[1+i] = "KDTree " + std::to_string(i+1) + ": " + std::to_string((int)vKeyFrameDB[kf_idx]->mnFrameId) + ", t=" + std::to_string(vKeyFrameDB[kf_idx]->timeStamp);
@@ -296,18 +322,30 @@ int main(int argc, char** argv)
                 if(use_rear){
                     score = res[i]->mPlaceRecognitionScore_rear;
                     imgs[4+i] = imread(strDatasetPath + files[res[i]->mnFrameId], IMREAD_COLOR);
-                    if(show_undistort){
+                    if(show_undistort && !crop_enabled){
+                        // 使用去畸变模式且不使用裁剪模式
                         imgs[4+i] = UndistortImage(imgs[4+i], camera2.first, camera2.second, camParams2, ImSizeFinal);
-                    }else{
+                    }else if (!crop_enabled){
+                        // 不使用去畸变模式且不使用裁剪模式
+                        cv::resize(imgs[4+i], imgs[4+i], ImSizeFinal);
+                    }else if (crop_enabled) {
+                        // 使用裁剪模式
+                        imgs[4+i] = CropImage(imgs[4+i], 480,0,960,720);
                         cv::resize(imgs[4+i], imgs[4+i], ImSizeFinal);
                     }
                     texts[4+i] = "Eigen Rear " + std::to_string(i+1) + ": " + std::to_string((int)res[i]->mnFrameId) + ", score=" + std::to_string(score);
                 }else{
                     score = res[i]->mPlaceRecognitionScore_front;
                     imgs[4+i] = imread(strDatasetPath + files[res[i]->mnFrameId], IMREAD_COLOR);
-                    if(show_undistort){
+                    if(show_undistort && !crop_enabled){
+                        // 使用去畸变模式且不使用裁剪模式
                         imgs[4+i] = UndistortImage(imgs[4+i], camera1.first, camera1.second, camParams1, ImSizeFinal);
-                    }else{
+                    }else if (!crop_enabled){
+                        // 不使用去畸变模式且不使用裁剪模式
+                        cv::resize(imgs[4+i], imgs[4+i], ImSizeFinal);
+                    }else if (crop_enabled) {
+                        // 使用裁剪模式
+                        imgs[4+i] = CropImage(imgs[4+i], 960,0,1920,1440);
                         cv::resize(imgs[4+i], imgs[4+i], ImSizeFinal);
                     }
                     texts[4+i] = "Eigen Front " + std::to_string(i+1) + ": " + std::to_string((int)res[i]->mnFrameId) + ", score=" + std::to_string(score);
@@ -338,7 +376,7 @@ int main(int argc, char** argv)
         
         cv::hconcat(std::vector<cv::Mat>{left_all, right_all}, all);
         cv::namedWindow("Compare Candidates", cv::WINDOW_NORMAL);
-        cv::resizeWindow("Compare Candidates", 1280, 720);
+        cv::resizeWindow("Compare Candidates", 1600, 720);
         
         if(valid_indices.size() > 0 || res.size() > 0){
             cv::imshow("Compare Candidates", all);

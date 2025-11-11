@@ -31,6 +31,22 @@ vector<string> GetPngFiles(string strPngDir)
     return ret;
 }
 
+cv::Mat CropImage(const cv::Mat& image, int x, int y, int width, int height)
+{
+    if (image.empty()) {
+        std::cerr << "Error: input image is empty!" << std::endl;
+        return cv::Mat();
+    }
+
+    cv::Rect roi(x, y, width, height);
+
+    roi &= cv::Rect(0, 0, image.cols, image.rows);
+
+    cv::Mat image_cropped = image(roi).clone();
+    cv::resize(image_cropped, image_cropped, cv::Size(640, 480));
+      
+    return image_cropped;
+}
 // {
 // #include <opencv2/core.hpp>
 // #include <iostream>

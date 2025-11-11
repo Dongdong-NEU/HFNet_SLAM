@@ -363,27 +363,30 @@ bool TensorRTEngine::infer(const std::vector<float>& input_data, std::vector<flo
         return false;
     }
     
-    // 对于动态形状，设置输入维度
+    // 对于显式batch，只有在绑定维度是动态的情况下才设置输入维度
     if (engine_->hasImplicitBatchDimension() == false) {
-        // 显式batch模式，需要设置输入形状
         for (int i = 0; i < engine_->getNbBindings(); ++i) {
             if (engine_->bindingIsInput(i)) {
-                // 设置输入维度为 [1, 3, 480, 640]
-                nvinfer1::Dims input_dims;
-                input_dims.nbDims = 4;
-                input_dims.d[0] = 1;      // batch size
-                input_dims.d[1] = 3;      // channels
-                input_dims.d[2] = 480;    // height
-                input_dims.d[3] = 640;    // width
-                
-                if (!context_->setBindingDimensions(i, input_dims)) {
-                    std::cerr << "[TensorRT] 设置输入维度失败" << std::endl;
-                    return false;
+                auto current_dims = context_->getBindingDimensions(i);
+                bool has_dynamic = false;
+                for (int j = 0; j < current_dims.nbDims; ++j) {
+                    if (current_dims.d[j] == -1) { has_dynamic = true; break; }
+                }
+                if (has_dynamic) {
+                    // 使用引擎当前输入维度配置中的高宽，避免与profile不匹配
+                    nvinfer1::Dims input_dims;
+                    input_dims.nbDims = 4;
+                    input_dims.d[0] = 1;               // batch size
+                    input_dims.d[1] = 3;               // channels
+                    input_dims.d[2] = input_dims_[2];  // height from engine binding
+                    input_dims.d[3] = input_dims_[3];  // width from engine binding
+                    if (!context_->setBindingDimensions(i, input_dims)) {
+                        std::cerr << "[TensorRT] 设置输入维度失败" << std::endl;
+                        return false;
+                    }
                 }
             }
         }
-        
-        // 检查所有输入维度是否有效
         if (!context_->allInputDimensionsSpecified()) {
             std::cerr << "[TensorRT] 输入维度未完全指定" << std::endl;
             return false;

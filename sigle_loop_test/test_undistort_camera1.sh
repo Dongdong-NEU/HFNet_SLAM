@@ -3,7 +3,7 @@
 echo "测试 camera_1 图像去畸变..."
 
 # 设置测试图像路径（请修改为你的实际图像路径）
-IMAGE_PATH="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/camera1_test/1747822563.968353.png"
+IMAGE_PATH="/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/camera1/1741760976.254167.png"
 
 # 检查图像是否存在
 if [ ! -f "$IMAGE_PATH" ]; then
@@ -16,8 +16,8 @@ cd build
 ./test_distort_image \
     "$IMAGE_PATH" \
     camera_1 \
-    ../config/cameras.cfg \
+    ../config/cameras-indoor.cfg \
     ../config/config.yaml \
-    0 0 3840 1440
+    960 0 1920 1440
 echo "测试完成!"
 
