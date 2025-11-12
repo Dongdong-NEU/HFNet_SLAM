@@ -43,7 +43,7 @@ cv::Mat CropImage(const cv::Mat& image, int x, int y, int width, int height)
     roi &= cv::Rect(0, 0, image.cols, image.rows);
 
     cv::Mat image_cropped = image(roi).clone();
-    cv::resize(image_cropped, image_cropped, cv::Size(640, 480));
+    cv::resize(image_cropped, image_cropped, cv::Size(320, 240));
       
     return image_cropped;
 }

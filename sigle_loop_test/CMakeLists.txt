@@ -57,6 +57,11 @@ set(TEST_DISTORT_SOURCES
     ${PROJECT_SOURCE_DIR}/src/fisheye_utils.cpp
 )
 
+set(TEST_REMAP_SOURCES
+    ${PROJECT_SOURCE_DIR}/app/test_remap_image.cpp
+    ${PROJECT_SOURCE_DIR}/src/fisheye_utils.cpp
+)
+
 # 主程序：test_match_global_feats
 add_executable(test_match_global_feats ${APP_SOURCES} ${LIBRARY_SOURCES} ${EIGENPLACES_SOURCES})
 
@@ -82,7 +87,15 @@ target_link_libraries(test_distort_image
     ${EIGEN3_LIBS}
 )
 
-install(TARGETS test_match_global_feats test_distort_image DESTINATION bin)
+# 图像重映射测试程序：test_remap_image
+add_executable(test_remap_image ${TEST_REMAP_SOURCES})
+
+target_link_libraries(test_remap_image
+    ${OpenCV_LIBS}
+    ${EIGEN3_LIBS}
+)
+
+install(TARGETS test_match_global_feats test_distort_image test_remap_image DESTINATION bin)
 
 message(STATUS "===============================================")
 message(STATUS "Project: ${PROJECT_NAME}")

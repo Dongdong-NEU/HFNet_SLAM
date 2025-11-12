@@ -87,8 +87,8 @@ int main(int argc, char** argv)
     EigenPlacesExtractor* pModel = nullptr;
     if (!use_offline_descriptor) {
         std::cout << "Initializing EigenPlaces model for online inference..." << std::endl;
-        std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
-        std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
+        std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_fixedshape_240_320_GPU_simplified.onnx";
+        std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_fixedshape_240_320_GPU_simplified.engine";
         // std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_fixedshape_360_640_GPU_simplified.onnx";
         // std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_fixedshape_360_640_GPU_simplified.engine";
         pModel = InitEigenPlacesModel(onnx_model_path, engine_cache_path, ImSizeFinal);
