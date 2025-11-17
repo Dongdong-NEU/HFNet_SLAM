@@ -7,10 +7,12 @@ namespace DeepRoute
 
 EigenPlacesExtractor::EigenPlacesExtractor(const std::string& onnx_model_path, 
                                          cv::Size input_size,
-                                         const std::string& engine_cache_path)
+                                         const std::string& engine_cache_path,
+                                         bool use_nhwc_layout)
     : onnx_model_path_(onnx_model_path)
     , engine_cache_path_(engine_cache_path)
     , input_size_(input_size)
+    , use_nhwc_layout_(use_nhwc_layout)
     , is_valid_(false)
 {
 }
@@ -22,6 +24,15 @@ EigenPlacesExtractor::~EigenPlacesExtractor()
 bool EigenPlacesExtractor::Initialize()
 {
     try {
+        // 自动检测模型输入格式
+        if (detectInputLayout()) {
+            std::cout << "[EigenPlaces] 检测到NHWC格式模型 (如fixedshape模型)" << std::endl;
+            use_nhwc_layout_ = true;
+        } else {
+            std::cout << "[EigenPlaces] 检测到NCHW格式模型 (如dynamic_batch模型)" << std::endl;
+            use_nhwc_layout_ = false;
+        }
+        
         // 初始化TensorRT引擎
         engine_ = std::make_unique<TensorRTEngine>(onnx_model_path_, engine_cache_path_, 1, true);
         if (!engine_->initialize()) {
@@ -29,14 +40,16 @@ bool EigenPlacesExtractor::Initialize()
             return false;
         }
         
-        // 初始化图像处理器
+        // 初始化图像处理器（传入布局参数）
         processor_ = std::make_unique<ImageProcessor>(
-            input_size_.height,  // 高度
-            input_size_.width    // 宽度
+            input_size_.height,      // 高度
+            input_size_.width,       // 宽度
+            use_nhwc_layout_        // 布局类型
         );
         
         is_valid_ = true;
-        std::cout << "EigenPlaces extractor initialized successfully" << std::endl;
+        std::cout << "EigenPlaces extractor initialized successfully with " 
+                  << (use_nhwc_layout_ ? "NHWC" : "NCHW") << " layout" << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -127,6 +140,29 @@ bool EigenPlacesExtractor::postprocessDescriptor(const std::vector<float>& raw_o
         
     } catch (const std::exception& e) {
         std::cerr << "Exception during descriptor postprocessing: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool EigenPlacesExtractor::detectInputLayout()
+{
+    try {
+        // 通过文件名快速判断
+        if (onnx_model_path_.find("fixedshape") != std::string::npos) {
+            std::cout << "[EigenPlaces] 根据文件名检测: fixedshape模型 -> NHWC布局" << std::endl;
+            return true;
+        }
+        if (onnx_model_path_.find("dynamic") != std::string::npos) {
+            std::cout << "[EigenPlaces] 根据文件名检测: dynamic模型 -> NCHW布局" << std::endl;
+            return false;
+        }
+        
+        // 默认使用NCHW（标准PyTorch格式）
+        std::cout << "[EigenPlaces] 无法从文件名判断，使用默认NCHW布局" << std::endl;
+        return false;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Exception during layout detection: " << e.what() << std::endl;
         return false;
     }
 }

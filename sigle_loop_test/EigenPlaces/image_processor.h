@@ -14,11 +14,13 @@ public:
      * 构造函数
      * @param input_height 输入图像高度
      * @param input_width 输入图像宽度
+     * @param use_nhwc_layout 是否使用NHWC格式输出（false=NCHW/CHW, true=NHWC/HWC）
      * @param mean RGB均值 (ImageNet标准)
      * @param std RGB标准差 (ImageNet标准)
      */
     ImageProcessor(int input_height , 
                    int input_width  ,
+                   bool use_nhwc_layout = false,
                    const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
                    const std::vector<float>& std = {0.229f, 0.224f, 0.225f});
     
@@ -67,13 +69,21 @@ public:
 private:
     int input_height_;
     int input_width_;
+    bool use_nhwc_layout_;
     std::vector<float> mean_;
     std::vector<float> std_;
     
     /**
-     * 将HWC格式转换为CHW格式
+     * 将HWC格式转换为CHW格式 (NCHW布局)
      * @param image 输入图像 (HWC)
      * @param output_data 输出数据 (CHW)
      */
     void hwcToChw(const cv::Mat& image, std::vector<float>& output_data);
+    
+    /**
+     * 将HWC格式保持为HWC一维数组 (NHWC布局)
+     * @param image 输入图像 (HWC)
+     * @param output_data 输出数据 (HWC一维)
+     */
+    void hwcToFlat(const cv::Mat& image, std::vector<float>& output_data);
 };

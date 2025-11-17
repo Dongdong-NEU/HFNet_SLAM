@@ -5,16 +5,22 @@
 
 ImageProcessor::ImageProcessor(int input_height, 
                                int input_width,
+                               bool use_nhwc_layout,
                                const std::vector<float>& mean,
                                const std::vector<float>& std)
     : input_height_(input_height)
     , input_width_(input_width)
+    , use_nhwc_layout_(use_nhwc_layout)
     , mean_(mean)
     , std_(std) {
     
     if (mean_.size() != 3 || std_.size() != 3) {
         throw std::invalid_argument("均值和标准差必须包含3个值 (RGB)");
     }
+    
+    std::cout << "[ImageProcessor] 初始化 - 使用" 
+              << (use_nhwc_layout_ ? "NHWC" : "NCHW") 
+              << "布局, 输入尺寸: " << input_width_ << "x" << input_height_ << std::endl;
 }
 
 bool ImageProcessor::preprocessImage(const std::string& image_path, std::vector<float>& output_data) {
@@ -34,16 +40,17 @@ bool ImageProcessor::preprocessImage(const std::string& image_path, std::vector<
 bool ImageProcessor::preprocessImage(const cv::Mat& image, std::vector<float>& output_data) {
     cv::Mat processed_image;
     
-    // 1. 转换颜色空间 BGR -> RGB
-    cv::cvtColor(image, processed_image, cv::COLOR_BGR2RGB);
+    // 注意：输入图像已经在EigenPlacesExtractor中转换为RGB格式
+    // 这里不再需要BGR->RGB转换，直接使用
+    processed_image = image.clone();
     
-    // 2. 调整图像尺寸
+    // 1. 调整图像尺寸
     cv::resize(processed_image, processed_image, cv::Size(input_width_, input_height_));
     
-    // 3. 转换为float类型并归一化到[0,1]
+    // 2. 转换为float类型并归一化到[0,1]
     processed_image.convertTo(processed_image, CV_32F, 1.0 / 255.0);
     
-    // 4. 标准化 (减均值除标准差)
+    // 3. 标准化 (减均值除标准差) - 使用ImageNet的RGB均值和标准差
     std::vector<cv::Mat> channels;
     cv::split(processed_image, channels);
     
@@ -53,8 +60,14 @@ bool ImageProcessor::preprocessImage(const cv::Mat& image, std::vector<float>& o
     
     cv::merge(channels, processed_image);
     
-    // 5. 转换为CHW格式
-    hwcToChw(processed_image, output_data);
+    // 4. 根据模型类型选择输出格式
+    if (use_nhwc_layout_) {
+        // NHWC布局：保持HWC顺序
+        hwcToFlat(processed_image, output_data);
+    } else {
+        // NCHW布局：转换为CHW顺序
+        hwcToChw(processed_image, output_data);
+    }
     
     // std::cout << "[ImageProcessor] 图像预处理完成, 输出尺寸: " << output_data.size() << std::endl;
     return true;
@@ -73,6 +86,26 @@ void ImageProcessor::hwcToChw(const cv::Mat& image, std::vector<float>& output_d
     for (int c = 0; c < channels; ++c) {
         float* channel_data = output_data.data() + c * height * width;
         memcpy(channel_data, channel_mats[c].ptr<float>(), height * width * sizeof(float));
+    }
+}
+
+void ImageProcessor::hwcToFlat(const cv::Mat& image, std::vector<float>& output_data) {
+    int channels = image.channels();
+    int height = image.rows;
+    int width = image.cols;
+    
+    output_data.resize(height * width * channels);
+    
+    // 按HWC顺序：每个像素的所有通道连续存储
+    // 内存布局：[H0W0C0, H0W0C1, H0W0C2, H0W1C0, H0W1C1, H0W1C2, ...]
+    int idx = 0;
+    for (int h = 0; h < height; ++h) {
+        const float* row_ptr = image.ptr<float>(h);
+        for (int w = 0; w < width; ++w) {
+            for (int c = 0; c < channels; ++c) {
+                output_data[idx++] = row_ptr[w * channels + c];
+            }
+        }
     }
 }
 

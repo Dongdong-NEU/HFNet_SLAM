@@ -43,7 +43,7 @@ cv::Mat CropImage(const cv::Mat& image, int x, int y, int width, int height)
     roi &= cv::Rect(0, 0, image.cols, image.rows);
 
     cv::Mat image_cropped = image(roi).clone();
-    cv::resize(image_cropped, image_cropped, cv::Size(320, 240));
+    // cv::resize(image_cropped, image_cropped, cv::Size(600, 450));
       
     return image_cropped;
 }
@@ -98,21 +98,21 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear
         mGlobalDescriptors_rear = cv::Mat::zeros(1, 2048, CV_32F); // EigenPlaces输出2048维特征
     }
 
-    // 将前后帧的全局描述子分别以当前时间戳命名，并保存到
-    string front_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/front_globaldes/" + to_string(time_stamp) + ".bin";
-    string rear_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/rear_globaldes/" + to_string(time_stamp) + ".bin";
-    cv::FileStorage fs_front(front_path, cv::FileStorage::WRITE);
-    fs_front << "global_descriptors" << mGlobalDescriptors_front;
-    fs_front.release();
-    cv::FileStorage fs_rear(rear_path, cv::FileStorage::WRITE);
-    fs_rear << "global_descriptors" << mGlobalDescriptors_rear;
-    fs_rear.release();
-    string odom_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/odom.txt";
-    std::ofstream odom_file(odom_path, std::ios::app);
-    // 将pose转换为四元数，并保存到odom.txt中,time_stamp保留六位小数
-    Eigen::Quaterniond q(pose.block<3,3>(0,0));
-    odom_file << to_string(time_stamp) << " " << pose(0,3) << " " << pose(1,3) << " " << pose(2,3) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
-    odom_file.close();
+    // // 将前后帧的全局描述子分别以当前时间戳命名，并保存到
+    // string front_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/front_globaldes/" + to_string(time_stamp) + ".bin";
+    // string rear_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/rear_globaldes/" + to_string(time_stamp) + ".bin";
+    // cv::FileStorage fs_front(front_path, cv::FileStorage::WRITE);
+    // fs_front << "global_descriptors" << mGlobalDescriptors_front;
+    // fs_front.release();
+    // cv::FileStorage fs_rear(rear_path, cv::FileStorage::WRITE);
+    // fs_rear << "global_descriptors" << mGlobalDescriptors_rear;
+    // fs_rear.release();
+    // string odom_path = "/home/xihuidong/codetree/repo/visual_mapping_test/avp-reloc-indoor/eigenplaces/odom.txt";
+    // std::ofstream odom_file(odom_path, std::ios::app);
+    // // 将pose转换为四元数，并保存到odom.txt中,time_stamp保留六位小数
+    // Eigen::Quaterniond q(pose.block<3,3>(0,0));
+    // odom_file << to_string(time_stamp) << " " << pose(0,3) << " " << pose(1,3) << " " << pose(2,3) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+    // odom_file.close();
     
     std::cout << "  Front EigenPlaces extraction: " << front_time << "ms, Rear: " << rear_time << "ms" << std::endl;
 }

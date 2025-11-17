@@ -87,8 +87,10 @@ int main(int argc, char** argv)
     EigenPlacesExtractor* pModel = nullptr;
     if (!use_offline_descriptor) {
         std::cout << "Initializing EigenPlaces model for online inference..." << std::endl;
-        std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_fixedshape_240_320_GPU_simplified.onnx";
-        std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_fixedshape_240_320_GPU_simplified.engine";
+        // std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
+        // std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
+        std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_fixedshape_300_400_GPU_simplified.onnx";
+        std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_fixedshape_300_400_GPU_simplified.engine";
         // std::string onnx_model_path = strModelPath + "/eigenplaces_resnet50_fixedshape_360_640_GPU_simplified.onnx";
         // std::string engine_cache_path = strModelPath + "/eigenplaces_resnet50_fixedshape_360_640_GPU_simplified.engine";
         pModel = InitEigenPlacesModel(onnx_model_path, engine_cache_path, ImSizeFinal);
@@ -135,7 +137,7 @@ int main(int argc, char** argv)
             std::cout << "Loading: " << rear_path << std::endl;
 
             auto img_start = chrono::steady_clock::now();
-            cv::Mat image_front = imread(front_path, IMREAD_GRAYSCALE);
+            cv::Mat image_front = imread(front_path, IMREAD_COLOR);
             if (!image_front.empty() && !crop_enabled) {
                 image_front = UndistortImage(image_front, camera1.first, camera1.second, camParams1, ImSizeFinal);
             }else if (!image_front.empty() && crop_enabled) {
@@ -143,7 +145,7 @@ int main(int argc, char** argv)
                 image_front = CropImage(image_front, 960,0,1920,1440);
             }
 
-            cv::Mat image_rear = imread(rear_path, IMREAD_GRAYSCALE);
+            cv::Mat image_rear = imread(rear_path, IMREAD_COLOR);
             if (!image_rear.empty() && !crop_enabled) {
                 image_rear = UndistortImage(image_rear, camera2.first, camera2.second, camParams2, ImSizeFinal);
             }else if (!image_rear.empty() && crop_enabled) {
@@ -278,6 +280,7 @@ int main(int argc, char** argv)
         
         // Query
         imgs[0] = image_show.clone();
+        cv::resize(imgs[0], imgs[0], ImSizeFinal);
         texts[0] = "Query: " + std::to_string((int)pKFHF->mnFrameId) + ", t=" + std::to_string(pKFHF->timeStamp);
         
         if (res.size() > 0 && use_rear) {

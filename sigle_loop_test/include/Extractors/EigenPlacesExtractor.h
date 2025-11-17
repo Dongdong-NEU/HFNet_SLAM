@@ -23,10 +23,12 @@ public:
      * @param onnx_model_path ONNX模型文件路径
      * @param engine_cache_path TensorRT引擎缓存文件路径（可选）
      * @param input_size 输入图像尺寸（默认512x512）
+     * @param use_nhwc_layout 是否使用NHWC布局（自动检测或手动指定）
      */
     EigenPlacesExtractor(const std::string& onnx_model_path, 
                         cv::Size input_size,
-                        const std::string& engine_cache_path = "");
+                        const std::string& engine_cache_path = "",
+                        bool use_nhwc_layout = false);
     
     /**
      * 析构函数
@@ -57,10 +59,17 @@ private:
     std::string onnx_model_path_;
     std::string engine_cache_path_;
     cv::Size input_size_;
+    bool use_nhwc_layout_;
     bool is_valid_;
     
     std::unique_ptr<TensorRTEngine> engine_;
     std::unique_ptr<ImageProcessor> processor_;
+    
+    /**
+     * 检测ONNX模型的输入格式（NCHW或NHWC）
+     * @return true表示NHWC格式，false表示NCHW格式
+     */
+    bool detectInputLayout();
     
     /**
      * 将OpenCV Mat转换为EigenPlaces需要的格式
