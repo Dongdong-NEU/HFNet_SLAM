@@ -1,2 +1,4 @@
 *.ONNX
 *.engine
+maps/*
+build/*

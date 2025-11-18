@@ -38,6 +38,9 @@ struct KeyFrameNetVlad
     KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, const string& descriptor_path);
     // 从离线描述子文件加载的构造函数（单相机，仅前目）
     KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, const string& descriptor_path, bool front_only);
+    // 从地图文件加载的构造函数（直接设置所有成员变量）
+    KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, 
+                    const cv::Mat& desc_front, const cv::Mat& desc_rear);
 
     // KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
     // KeyFrameNetVlad(int id ,const cv::Mat im, BaseModel* pModel, double time_stamp, Eigen::Matrix4d pose);
@@ -99,6 +102,11 @@ EigenPlacesExtractor* InitEigenPlacesModel(const std::string& onnx_model_path, c
 
 // 离线描述子加载函数
 bool LoadOfflineDescriptor(const string& bin_file_path, cv::Mat& descriptor_front, cv::Mat& descriptor_rear);
+
+// 地图保存和加载函数
+bool SaveKeyFrameDatabase(const string& map_file_path, const KeyFrameDB& keyframe_db);
+bool LoadKeyFrameDatabase(const string& map_file_path, KeyFrameDB& keyframe_db, 
+                         std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>& keyframe_positions);
 
 
 #endif // COMMON_H

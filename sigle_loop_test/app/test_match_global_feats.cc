@@ -286,7 +286,7 @@ void RunLoopDetection(
     std::cout << "Starting loop detection..." << std::endl;
     std::cout << "========================================" << std::endl;
     
-    int frame_idx = 0;
+    int frame_idx = 1800;
     bool use_rear = false;
     
     while (frame_idx < static_cast<int>(files_front.size()) - 1) {
@@ -477,12 +477,20 @@ int main(int argc, char** argv)
     Eigen::setNbThreads(std::max(Eigen::nbThreads() / 2, 1));
     
     // ========== 参数解析 ==========
-    if (argc != 7 && argc != 8) {
-        std::cerr << "\nUsage: " << argv[0] << " <dataset_front> <dataset_rear> "
+    if (argc != 7 && argc != 8 && argc != 9) {
+        std::cerr << "\n用法: " << argv[0] << " <dataset_front> <dataset_rear> "
                   << "<model_path> <gt_poses> <camera_cfg> <config_yaml> "
-                  << "[offline_descriptor_path]" << std::endl;
-        std::cerr << "\nIf offline_descriptor_path is provided, will load "
-                  << "pre-computed descriptors" << std::endl;
+                  << "[offline_descriptor_path] [map_path]" << std::endl;
+        std::cerr << "\n可选参数说明:" << std::endl;
+        std::cerr << "  offline_descriptor_path - 预计算描述子路径（用于离线模式）" << std::endl;
+        std::cerr << "  map_path - 地图文件路径" << std::endl;
+        std::cerr << "    * 如果文件已存在：直接加载地图，跳过构建" << std::endl;
+        std::cerr << "    * 如果文件不存在：构建地图后保存到该路径" << std::endl;
+        std::cerr << "\n示例：" << std::endl;
+        std::cerr << "  # 构建地图并保存" << std::endl;
+        std::cerr << "  " << argv[0] << " <参数...> /path/to/map.bin" << std::endl;
+        std::cerr << "  # 加载已有地图" << std::endl;
+        std::cerr << "  " << argv[0] << " <参数...> /path/to/existing_map.bin" << std::endl;
         return -1;
     }
     
@@ -493,9 +501,26 @@ int main(int argc, char** argv)
     config.gt_poses_path = argv[4];
     config.cameras_cfg_path = argv[5];
     config.config_yaml_path = argv[6];
-    config.use_offline_descriptor = (argc == 8);
-    if (config.use_offline_descriptor) {
+    
+    // 解析可选参数
+    string map_file_path = "";
+    if (argc == 8) {
+        // 可能是 offline_descriptor_path 或 map_path
+        string arg7 = argv[7];
+        // 判断是否为地图文件（以.bin结尾）
+        if (arg7.size() > 4 && arg7.substr(arg7.size() - 4) == ".bin") {
+            map_file_path = arg7;
+            config.use_offline_descriptor = false;
+        } else {
+            config.use_offline_descriptor = true;
+            config.offline_descriptor_path = arg7;
+        }
+    } else if (argc == 9) {
+        config.use_offline_descriptor = true;
         config.offline_descriptor_path = argv[7];
+        map_file_path = argv[8];
+    } else {
+        config.use_offline_descriptor = false;
     }
     
     // 设置模型文件名
@@ -534,34 +559,78 @@ int main(int argc, char** argv)
     std::cout << "Loaded " << aligned_data.poses.size() << " ground truth poses" << std::endl;
     assert(aligned_data.files_front.size() == aligned_data.poses.size());
     
-    // ========== 初始化模型 ==========
-    EigenPlacesExtractor* model = nullptr;
-    if (!config.use_offline_descriptor) {
-        std::cout << "\nInitializing EigenPlaces model..." << std::endl;
-        string onnx_path = config.model_path + config.onnx_model_name;
-        string engine_path = config.model_path + config.engine_cache_name;
-        model = InitEigenPlacesModel(onnx_path, engine_path, target_size);
-        if (!model || !model->IsValid()) {
-            std::cerr << "Failed to initialize model" << std::endl;
-            return -1;
+    // ========== 检查是否加载已有地图 ==========
+    KeyFrameDB keyframe_db;
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> keyframe_positions;
+    bool map_loaded = false;
+    
+    if (!map_file_path.empty()) {
+        // 检查地图文件是否存在
+        std::ifstream map_check(map_file_path);
+        if (map_check.good()) {
+            map_check.close();
+            std::cout << "\n检测到已有地图文件，正在加载..." << std::endl;
+            if (LoadKeyFrameDatabase(map_file_path, keyframe_db, keyframe_positions)) {
+                map_loaded = true;
+                std::cout << "地图加载成功，跳过构建阶段！" << std::endl;
+            } else {
+                std::cerr << "地图加载失败，将重新构建" << std::endl;
+            }
+        } else {
+            std::cout << "\n地图文件不存在，将构建新地图并保存到: " << map_file_path << std::endl;
         }
     }
     
-    // ========== 构建关键帧数据库 ==========
-    KeyFrameDB keyframe_db;
-    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> keyframe_positions;
+    // ========== 初始化模型 ==========
+    // 注意：即使加载了地图，也需要初始化模型用于查询帧的特征提取
+    EigenPlacesExtractor* model = nullptr;
     
-    if (!BuildKeyFrameDatabase(
-        config, aligned_data.files_front, aligned_data.files_rear, 
-        aligned_data.times, aligned_data.poses,
-        undistort_maps_front, undistort_maps_rear,
-        cam_params_front, cam_params_rear, target_size,
-        model, keyframe_db, keyframe_positions))
-    {
-        std::cerr << "Failed to build keyframe database" << std::endl;
-        return -1;
+    if (!map_loaded) {
+        // 需要构建地图，必须初始化模型（除非使用离线描述子）
+        if (!config.use_offline_descriptor) {
+            std::cout << "\nInitializing EigenPlaces model..." << std::endl;
+            string onnx_path = config.model_path + config.onnx_model_name;
+            string engine_path = config.model_path + config.engine_cache_name;
+            model = InitEigenPlacesModel(onnx_path, engine_path, target_size);
+            if (!model || !model->IsValid()) {
+                std::cerr << "Failed to initialize model" << std::endl;
+                return -1;
+            }
+        }
+        
+        // ========== 构建关键帧数据库 ==========
+        if (!BuildKeyFrameDatabase(
+            config, aligned_data.files_front, aligned_data.files_rear, 
+            aligned_data.times, aligned_data.poses,
+            undistort_maps_front, undistort_maps_rear,
+            cam_params_front, cam_params_rear, target_size,
+            model, keyframe_db, keyframe_positions))
+        {
+            std::cerr << "Failed to build keyframe database" << std::endl;
+            return -1;
+        }
+        
+        // ========== 保存地图（如果指定了地图路径） ==========
+        if (!map_file_path.empty()) {
+            if (!SaveKeyFrameDatabase(map_file_path, keyframe_db)) {
+                std::cerr << "警告：地图保存失败，但继续运行" << std::endl;
+            }
+        }
+    } else {
+        // 地图已加载，但仍需初始化模型用于查询帧特征提取（除非使用离线描述子）
+        if (!config.use_offline_descriptor) {
+            std::cout << "\n地图已加载，正在初始化模型用于查询帧..." << std::endl;
+            string onnx_path = config.model_path + config.onnx_model_name;
+            string engine_path = config.model_path + config.engine_cache_name;
+            model = InitEigenPlacesModel(onnx_path, engine_path, target_size);
+            if (!model || !model->IsValid()) {
+                std::cerr << "Failed to initialize model for query frames" << std::endl;
+                return -1;
+            }
+        }
     }
     
+    // ========== 验证关键帧数量 ==========
     if (keyframe_db.size() <= 300) {
         std::cerr << "Too few keyframes: " << keyframe_db.size() << " (need > 300)" << std::endl;
         return -1;

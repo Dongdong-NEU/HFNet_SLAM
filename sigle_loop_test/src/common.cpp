@@ -568,6 +568,18 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose
     // 单相机模式不使用后目描述子
 }
 
+// 从地图文件加载的构造函数实现（直接设置所有成员变量，不进行特征提取）
+KeyFrameNetVlad::KeyFrameNetVlad(int id, double time_stamp, Eigen::Matrix4d pose, 
+                                const cv::Mat& desc_front, const cv::Mat& desc_rear) {
+    mnFrameId = id;
+    timeStamp = time_stamp;
+    curPose = pose;
+    mGlobalDescriptors_front = desc_front.clone();
+    mGlobalDescriptors_rear = desc_rear.clone();
+    mPlaceRecognitionScore_front = 1.0;
+    mPlaceRecognitionScore_rear = 1.0;
+}
+
 // 离线描述子加载函数实现
 bool LoadOfflineDescriptor(const string& bin_file_path, cv::Mat& descriptor_front, cv::Mat& descriptor_rear) {
     std::ifstream file(bin_file_path, std::ios::binary);
@@ -598,6 +610,228 @@ bool LoadOfflineDescriptor(const string& bin_file_path, cv::Mat& descriptor_fron
     // batch1是后目的全局描述子
     descriptor_rear = cv::Mat(1, feature_dim, CV_32F);
     memcpy(descriptor_rear.ptr<float>(), data.data() + feature_dim, feature_dim * sizeof(float));
+    
+    return true;
+}
+
+// ============================================================================
+// 地图保存和加载功能实现
+// ============================================================================
+
+/**
+ * 保存关键帧数据库到文件
+ * 文件格式（二进制）：
+ * - 魔数（4字节）："KFDB"
+ * - 版本号（4字节）：当前为1
+ * - 关键帧数量（4字节）
+ * - 对于每个关键帧：
+ *   - mnFrameId (int)
+ *   - timeStamp (double)
+ *   - curPose (16个double, 4x4矩阵)
+ *   - front descriptor shape: rows, cols (2个int)
+ *   - front descriptor data (rows*cols个float)
+ *   - rear descriptor shape: rows, cols (2个int)
+ *   - rear descriptor data (rows*cols个float)
+ */
+bool SaveKeyFrameDatabase(const string& map_file_path, const KeyFrameDB& keyframe_db) {
+    std::cout << "\n========================================" << std::endl;
+    std::cout << "保存关键帧数据库到: " << map_file_path << std::endl;
+    std::cout << "========================================" << std::endl;
+    
+    std::ofstream file(map_file_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "无法创建地图文件: " << map_file_path << std::endl;
+        return false;
+    }
+    
+    // 写入魔数
+    const char magic[4] = {'K', 'F', 'D', 'B'};
+    file.write(magic, 4);
+    
+    // 写入版本号
+    int version = 1;
+    file.write(reinterpret_cast<const char*>(&version), sizeof(int));
+    
+    // 写入关键帧数量
+    int num_keyframes = static_cast<int>(keyframe_db.size());
+    file.write(reinterpret_cast<const char*>(&num_keyframes), sizeof(int));
+    
+    std::cout << "正在保存 " << num_keyframes << " 个关键帧..." << std::endl;
+    
+    // 写入每个关键帧
+    int progress = 0;
+    for (const auto* kf : keyframe_db) {
+        // 帧ID
+        file.write(reinterpret_cast<const char*>(&kf->mnFrameId), sizeof(int));
+        
+        // 时间戳
+        file.write(reinterpret_cast<const char*>(&kf->timeStamp), sizeof(double));
+        
+        // 位姿（4x4矩阵，按行优先存储）
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                double val = kf->curPose(i, j);
+                file.write(reinterpret_cast<const char*>(&val), sizeof(double));
+            }
+        }
+        
+        // 前置相机描述子
+        int front_rows = kf->mGlobalDescriptors_front.rows;
+        int front_cols = kf->mGlobalDescriptors_front.cols;
+        file.write(reinterpret_cast<const char*>(&front_rows), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&front_cols), sizeof(int));
+        
+        if (kf->mGlobalDescriptors_front.isContinuous()) {
+            file.write(reinterpret_cast<const char*>(kf->mGlobalDescriptors_front.data), 
+                      front_rows * front_cols * sizeof(float));
+        } else {
+            for (int i = 0; i < front_rows; ++i) {
+                file.write(reinterpret_cast<const char*>(kf->mGlobalDescriptors_front.ptr<float>(i)), 
+                          front_cols * sizeof(float));
+            }
+        }
+        
+        // 后置相机描述子
+        int rear_rows = kf->mGlobalDescriptors_rear.rows;
+        int rear_cols = kf->mGlobalDescriptors_rear.cols;
+        file.write(reinterpret_cast<const char*>(&rear_rows), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&rear_cols), sizeof(int));
+        
+        if (kf->mGlobalDescriptors_rear.isContinuous()) {
+            file.write(reinterpret_cast<const char*>(kf->mGlobalDescriptors_rear.data), 
+                      rear_rows * rear_cols * sizeof(float));
+        } else {
+            for (int i = 0; i < rear_rows; ++i) {
+                file.write(reinterpret_cast<const char*>(kf->mGlobalDescriptors_rear.ptr<float>(i)), 
+                          rear_cols * sizeof(float));
+            }
+        }
+        
+        // 进度显示
+        progress++;
+        if (progress % 100 == 0 || progress == num_keyframes) {
+            std::cout << "  进度: " << progress << "/" << num_keyframes 
+                     << " (" << (progress * 100 / num_keyframes) << "%)" << std::endl;
+        }
+    }
+    
+    file.close();
+    
+    // 获取文件大小
+    std::ifstream file_check(map_file_path, std::ios::binary | std::ios::ate);
+    std::streamsize file_size = file_check.tellg();
+    file_check.close();
+    
+    std::cout << "\n地图保存成功！" << std::endl;
+    std::cout << "  文件路径: " << map_file_path << std::endl;
+    std::cout << "  文件大小: " << (file_size / 1024.0 / 1024.0) << " MB" << std::endl;
+    std::cout << "  关键帧数: " << num_keyframes << std::endl;
+    std::cout << "========================================\n" << std::endl;
+    
+    return true;
+}
+
+/**
+ * 从文件加载关键帧数据库
+ */
+bool LoadKeyFrameDatabase(const string& map_file_path, KeyFrameDB& keyframe_db, 
+                         std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>& keyframe_positions) {
+    std::cout << "\n========================================" << std::endl;
+    std::cout << "从文件加载关键帧数据库: " << map_file_path << std::endl;
+    std::cout << "========================================" << std::endl;
+    
+    std::ifstream file(map_file_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "无法打开地图文件: " << map_file_path << std::endl;
+        return false;
+    }
+    
+    // 检查魔数
+    char magic[4];
+    file.read(magic, 4);
+    if (magic[0] != 'K' || magic[1] != 'F' || magic[2] != 'D' || magic[3] != 'B') {
+        std::cerr << "错误：不是有效的地图文件（魔数不匹配）" << std::endl;
+        file.close();
+        return false;
+    }
+    
+    // 读取版本号
+    int version;
+    file.read(reinterpret_cast<char*>(&version), sizeof(int));
+    if (version != 1) {
+        std::cerr << "错误：不支持的地图文件版本: " << version << std::endl;
+        file.close();
+        return false;
+    }
+    
+    // 读取关键帧数量
+    int num_keyframes;
+    file.read(reinterpret_cast<char*>(&num_keyframes), sizeof(int));
+    std::cout << "正在加载 " << num_keyframes << " 个关键帧..." << std::endl;
+    
+    // 清空现有数据
+    keyframe_db.clear();
+    keyframe_positions.clear();
+    keyframe_db.reserve(num_keyframes);
+    keyframe_positions.reserve(num_keyframes);
+    
+    // 读取每个关键帧
+    int progress = 0;
+    for (int i = 0; i < num_keyframes; ++i) {
+        // 读取帧ID
+        int frame_id;
+        file.read(reinterpret_cast<char*>(&frame_id), sizeof(int));
+        
+        // 读取时间戳
+        double timestamp;
+        file.read(reinterpret_cast<char*>(&timestamp), sizeof(double));
+        
+        // 读取位姿
+        Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                double val;
+                file.read(reinterpret_cast<char*>(&val), sizeof(double));
+                pose(row, col) = val;
+            }
+        }
+        
+        // 读取前置相机描述子
+        int front_rows, front_cols;
+        file.read(reinterpret_cast<char*>(&front_rows), sizeof(int));
+        file.read(reinterpret_cast<char*>(&front_cols), sizeof(int));
+        cv::Mat descriptor_front(front_rows, front_cols, CV_32F);
+        file.read(reinterpret_cast<char*>(descriptor_front.data), 
+                 front_rows * front_cols * sizeof(float));
+        
+        // 读取后置相机描述子
+        int rear_rows, rear_cols;
+        file.read(reinterpret_cast<char*>(&rear_rows), sizeof(int));
+        file.read(reinterpret_cast<char*>(&rear_cols), sizeof(int));
+        cv::Mat descriptor_rear(rear_rows, rear_cols, CV_32F);
+        file.read(reinterpret_cast<char*>(descriptor_rear.data), 
+                 rear_rows * rear_cols * sizeof(float));
+        
+        // 使用专门的构造函数创建关键帧对象（不进行特征提取）
+        KeyFrameNetVlad* kf = new KeyFrameNetVlad(frame_id, timestamp, pose, 
+                                                  descriptor_front, descriptor_rear);
+        
+        keyframe_db.push_back(kf);
+        keyframe_positions.push_back(pose.block<3,1>(0,3));
+        
+        // 进度显示
+        progress++;
+        if (progress % 100 == 0 || progress == num_keyframes) {
+            std::cout << "  进度: " << progress << "/" << num_keyframes 
+                     << " (" << (progress * 100 / num_keyframes) << "%)" << std::endl;
+        }
+    }
+    
+    file.close();
+    
+    std::cout << "\n地图加载成功！" << std::endl;
+    std::cout << "  关键帧数: " << keyframe_db.size() << std::endl;
+    std::cout << "========================================\n" << std::endl;
     
     return true;
 }
