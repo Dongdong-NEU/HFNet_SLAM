@@ -46,6 +46,7 @@ file(GLOB_RECURSE LIBRARY_SOURCES
 set(EIGENPLACES_SOURCES
     ${PROJECT_SOURCE_DIR}/EigenPlaces/tensorrt_engine.cpp
     ${PROJECT_SOURCE_DIR}/EigenPlaces/image_processor.cpp
+    ${PROJECT_SOURCE_DIR}/src/Extractors/EigenPlacesExtractor.cc
 )
 
 set(APP_SOURCES
@@ -60,6 +61,7 @@ set(TEST_DISTORT_SOURCES
 set(TEST_REMAP_SOURCES
     ${PROJECT_SOURCE_DIR}/app/test_remap_image.cpp
     ${PROJECT_SOURCE_DIR}/src/fisheye_utils.cpp
+    ${PROJECT_SOURCE_DIR}/src/common.cpp
 )
 
 # 主程序：test_match_global_feats
@@ -87,13 +89,22 @@ target_link_libraries(test_distort_image
     ${EIGEN3_LIBS}
 )
 
-# 图像重映射测试程序：test_remap_image
-add_executable(test_remap_image ${TEST_REMAP_SOURCES})
+# 图像重映射测试程序：test_remap_image (包含EigenPlaces支持)
+add_executable(test_remap_image ${TEST_REMAP_SOURCES} ${EIGENPLACES_SOURCES})
 
 target_link_libraries(test_remap_image
     ${OpenCV_LIBS}
     ${EIGEN3_LIBS}
+    ${Pangolin_LIBRARIES}
 )
+
+if(${USE_TENSORRT})
+    target_link_libraries(test_remap_image
+        /home/xihuidong/usr_lib/TensorRT-8.5.3.1/lib/libnvinfer.so.8
+        /home/xihuidong/usr_lib/TensorRT-8.5.3.1/lib/libnvonnxparser.so
+        ${CUDA_LIBRARIES}
+    )
+endif()
 
 install(TARGETS test_match_global_feats test_distort_image test_remap_image DESTINATION bin)
 

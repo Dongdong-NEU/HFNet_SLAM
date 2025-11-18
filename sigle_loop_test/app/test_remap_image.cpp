@@ -7,9 +7,12 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>
 #include "../include/Extractors/fisheye_utils.h"
+#include "../include/Extractors/common.h"
+#include "../include/Extractors/EigenPlacesExtractor.h"
 
 using namespace std;
 using namespace cv;
+using namespace DeepRoute;
 
 // 相机外参结构体
 struct CameraExtrinsic {
@@ -177,14 +180,72 @@ void drawGrid(Mat& img, int grid_size = 50) {
     circle(img, Point(img.cols-20, img.rows-20), 10, Scalar(255, 0, 0), 2);
 }
 
+// 计算两个描述子之间的欧氏距离
+float computeEuclideanDistance(const cv::Mat& desc1, const cv::Mat& desc2) {
+    if (desc1.empty() || desc2.empty()) {
+        cerr << "错误: 描述子为空" << endl;
+        return -1.0f;
+    }
+    
+    if (desc1.rows != desc2.rows || desc1.cols != desc2.cols) {
+        cerr << "错误: 描述子维度不匹配 (" << desc1.cols << " vs " << desc2.cols << ")" << endl;
+        return -1.0f;
+    }
+    
+    float distance = 0.0f;
+    for (int i = 0; i < desc1.cols; ++i) {
+        float diff = desc1.at<float>(0, i) - desc2.at<float>(0, i);
+        distance += diff * diff;
+    }
+    
+    return std::sqrt(distance);
+}
+
+// 计算两个描述子之间的余弦相似度
+float computeCosineSimilarity(const cv::Mat& desc1, const cv::Mat& desc2) {
+    if (desc1.empty() || desc2.empty()) {
+        cerr << "错误: 描述子为空" << endl;
+        return -1.0f;
+    }
+    
+    if (desc1.rows != desc2.rows || desc1.cols != desc2.cols) {
+        cerr << "错误: 描述子维度不匹配" << endl;
+        return -1.0f;
+    }
+    
+    float dot_product = 0.0f;
+    float norm1 = 0.0f;
+    float norm2 = 0.0f;
+    
+    for (int i = 0; i < desc1.cols; ++i) {
+        float val1 = desc1.at<float>(0, i);
+        float val2 = desc2.at<float>(0, i);
+        dot_product += val1 * val2;
+        norm1 += val1 * val1;
+        norm2 += val2 * val2;
+    }
+    
+    norm1 = std::sqrt(norm1);
+    norm2 = std::sqrt(norm2);
+    
+    if (norm1 < 1e-12f || norm2 < 1e-12f) {
+        return 0.0f;
+    }
+    
+    return dot_product / (norm1 * norm2);
+}
+
 int main(int argc, char** argv) {
     cout << "========================================" << endl;
-    cout << "相机图像对齐测试程序" << endl;
+    cout << "相机图像对齐与相似度验证程序" << endl;
     cout << "用于对齐camera_1和camera_4在车辆旋转180度时看到的相同场景" << endl;
+    cout << "并计算全局描述子相似度" << endl;
     cout << "========================================" << endl;
     
     // 配置文件路径
     string config_file = "/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/config/cameras-inverse.cfg";
+    string model_path = "/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/EigenPlaces/ONNX";
+    string config_yaml_path = "/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/config/config.yaml";
     
     // 加载camera_1的参数
     FisheyeCameraParams cam1_params;
@@ -226,6 +287,57 @@ int main(int argc, char** argv) {
     
     cout << "\n重映射参数计算完成！" << endl;
     
+    // 初始化EigenPlaces模型（用于相似度计算）
+    EigenPlacesExtractor* eigenplaces_model = nullptr;
+    bool enable_similarity_check = (argc >= 3);  // 只有提供图像时才初始化模型
+    
+    if (enable_similarity_check) {
+        cout << "\n========================================" << endl;
+        cout << "初始化EigenPlaces模型..." << endl;
+        cout << "========================================" << endl;
+        
+        // 加载配置获取目标图像尺寸
+        cv::Size target_size;
+        LoadConfigYaml(config_yaml_path, target_size);
+        cout << "目标图像尺寸: " << target_size.width << "x" << target_size.height << endl;
+        
+        // 初始化模型（优先使用fixedshape_300_400模型）
+        string onnx_path = model_path + "/eigenplaces_resnet50_fixedshape_300_400_GPU_simplified.onnx";
+        string engine_path = model_path + "/eigenplaces_resnet50_fixedshape_300_400_GPU_simplified.engine";
+        
+        // 检查fixedshape_300_400模型是否存在
+        bool use_fixedshape = std::ifstream(onnx_path).good();
+        
+        if (!use_fixedshape) {
+            cout << "提示: 未找到300x400的fixedshape模型，尝试使用dynamic_batch模型" << endl;
+            onnx_path = model_path + "/eigenplaces_resnet50_dynamic_batch_simplified.onnx";
+            engine_path = model_path + "/eigenplaces_resnet50_dynamic_batch_simplified.engine";
+            
+            // 删除旧的engine文件，让TensorRT为新的输入尺寸重新生成
+            if (std::ifstream(engine_path).good()) {
+                cout << "删除旧的engine文件以重新生成..." << endl;
+                std::remove(engine_path.c_str());
+            }
+        }
+        
+        cout << "使用ONNX模型: " << onnx_path << endl;
+        eigenplaces_model = InitEigenPlacesModel(onnx_path, engine_path, target_size);
+        
+        if (!eigenplaces_model || !eigenplaces_model->IsValid()) {
+            cerr << "警告: EigenPlaces模型初始化失败，将跳过相似度计算" << endl;
+            cerr << "建议: " << endl;
+            if (!use_fixedshape) {
+                cerr << "  1. 使用fixedshape_300_400模型，或" << endl;
+                cerr << "  2. 确保dynamic_batch模型文件存在" << endl;
+            } else {
+                cerr << "  1. 检查模型文件是否完整" << endl;
+            }
+            enable_similarity_check = false;
+        } else {
+            cout << "✓ EigenPlaces模型初始化成功" << endl;
+        }
+    }
+    
     // 如果提供了测试图像，进行处理
     if (argc >= 3) {
         string img1_path = argv[1];
@@ -252,7 +364,38 @@ int main(int argc, char** argv) {
         remap(img1, img1_remapped, map1_x, map1_y, INTER_LINEAR);
         remap(img4, img4_remapped, map4_x, map4_y, INTER_LINEAR);
         
-        // 在图像上绘制网格
+        cout << "\n应用裁剪和resize..." << endl;
+        cout << "重映射后尺寸: " << img1_remapped.cols << "x" << img1_remapped.rows << endl;
+        
+        // 裁剪参数（根据test_match_global_feats.cc中的参数）
+        // camera1重映射后的尺寸是1920x1080，类似于原始camera4的尺寸
+        // 使用类似camera4的裁剪参数，但需要按比例调整
+        // 原camera4裁剪: x=480, y=0, width=960, height=720 (从1920x1080裁剪)
+        
+        // 为camera1和camera4设置相同的裁剪参数（因为已经对齐）
+        int crop_x = 480;
+        int crop_y = 0; 
+        int crop_width = 960;
+        int crop_height = 720;
+        
+        cout << "裁剪参数: x=" << crop_x << ", y=" << crop_y 
+             << ", width=" << crop_width << ", height=" << crop_height << endl;
+        
+        // 裁剪图像
+        Mat img1_cropped = CropImage(img1_remapped, crop_x, crop_y, crop_width, crop_height);
+        Mat img4_cropped = CropImage(img4_remapped, crop_x, crop_y, crop_width, crop_height);
+        
+        cout << "裁剪后尺寸: " << img1_cropped.cols << "x" << img1_cropped.rows << endl;
+        
+        // Resize到目标尺寸 (400x300)
+        cv::Size target_resize(400, 300);
+        Mat img1_final, img4_final;
+        cv::resize(img1_cropped, img1_final, target_resize);
+        cv::resize(img4_cropped, img4_final, target_resize);
+        
+        cout << "最终处理尺寸: " << img1_final.cols << "x" << img1_final.rows << endl;
+        
+        // 在图像上绘制网格（使用未裁剪的版本用于可视化对比）
         Mat img1_grid = img1_remapped.clone();
         Mat img4_grid = img4_remapped.clone();
         drawGrid(img1_grid);
@@ -282,12 +425,98 @@ int main(int argc, char** argv) {
         imwrite("camera4_remapped_grid.jpg", img4_grid);
         imwrite("comparison.jpg", comparison);
         
+        // 保存裁剪和resize后的图像（用于描述子提取）
+        imwrite("camera1_final_for_descriptor.jpg", img1_final);
+        imwrite("camera4_final_for_descriptor.jpg", img4_final);
+        
         cout << "\n结果已保存:" << endl;
         cout << "  - camera1_remapped.jpg (camera1处理后的图像)" << endl;
         cout << "  - camera4_remapped.jpg (camera4处理后的图像)" << endl;
         cout << "  - camera1_remapped_grid.jpg (带网格)" << endl;
         cout << "  - camera4_remapped_grid.jpg (带网格)" << endl;
         cout << "  - comparison.jpg (对比图)" << endl;
+        cout << "  - camera1_final_for_descriptor.jpg (用于描述子提取的最终图像)" << endl;
+        cout << "  - camera4_final_for_descriptor.jpg (用于描述子提取的最终图像)" << endl;
+        
+        // ========== 计算全局描述子相似度 ==========
+        if (enable_similarity_check && eigenplaces_model) {
+            cout << "\n========================================" << endl;
+            cout << "计算全局描述子相似度..." << endl;
+            cout << "使用裁剪和resize后的图像 (" << img1_final.cols << "x" << img1_final.rows << ")" << endl;
+            cout << "========================================" << endl;
+            
+            try {
+                // 提取camera1的全局描述子（使用裁剪和resize后的图像）
+                cout << "\n提取camera1图像的全局描述子..." << endl;
+                cv::Mat desc1;
+                if (!eigenplaces_model->ExtractGlobalDescriptor(img1_final, desc1)) {
+                    cerr << "✗ camera1描述子提取失败" << endl;
+                } else {
+                    cout << "✓ camera1描述子提取成功 (维度: " << desc1.cols << ")" << endl;
+                }
+                
+                // 提取camera4的全局描述子（使用裁剪和resize后的图像）
+                cout << "\n提取camera4图像的全局描述子..." << endl;
+                cv::Mat desc4;
+                if (!eigenplaces_model->ExtractGlobalDescriptor(img4_final, desc4)) {
+                    cerr << "✗ camera4描述子提取失败" << endl;
+                } else {
+                    cout << "✓ camera4描述子提取成功 (维度: " << desc4.cols << ")" << endl;
+                }
+                
+                // 计算相似度
+                if (!desc1.empty() && !desc4.empty()) {
+                    cout << "\n========================================" << endl;
+                    cout << "相似度计算结果:" << endl;
+                    cout << "========================================" << endl;
+                    
+                    float euclidean_dist = computeEuclideanDistance(desc1, desc4);
+                    float cosine_sim = computeCosineSimilarity(desc1, desc4);
+                    
+                    cout << "\n欧氏距离: " << euclidean_dist << endl;
+                    cout << "  - 说明: 距离越小，图像越相似" << endl;
+                    cout << "  - 参考: < 0.5 (非常相似), 0.5-0.7 (相似), > 0.7 (不相似)" << endl;
+                    
+                    cout << "\n余弦相似度: " << cosine_sim << endl;
+                    cout << "  - 说明: 相似度越接近1，图像越相似" << endl;
+                    cout << "  - 参考: > 0.9 (非常相似), 0.7-0.9 (相似), < 0.7 (不相似)" << endl;
+                    
+                    // 给出评估结论
+                    cout << "\n========================================" << endl;
+                    cout << "对齐质量评估:" << endl;
+                    cout << "========================================" << endl;
+                    
+                    if (euclidean_dist < 0.5 && cosine_sim > 0.9) {
+                        cout << "✓ 对齐效果: 优秀 ⭐⭐⭐⭐⭐" << endl;
+                        cout << "  两张图像非常相似，对齐效果很好！" << endl;
+                    } else if (euclidean_dist < 0.7 && cosine_sim > 0.7) {
+                        cout << "✓ 对齐效果: 良好 ⭐⭐⭐⭐" << endl;
+                        cout << "  两张图像比较相似，对齐基本成功" << endl;
+                    } else if (euclidean_dist < 1.0 && cosine_sim > 0.5) {
+                        cout << "⚠ 对齐效果: 一般 ⭐⭐⭐" << endl;
+                        cout << "  两张图像有一定相似性，但对齐可能需要调整" << endl;
+                    } else {
+                        cout << "✗ 对齐效果: 较差 ⭐⭐" << endl;
+                        cout << "  两张图像相似度较低，建议检查:" << endl;
+                        cout << "    1. 是否确实是同一场景？" << endl;
+                        cout << "    2. 相机外参是否正确？" << endl;
+                        cout << "    3. 车辆是否真的旋转了180度？" << endl;
+                    }
+                    
+                    cout << "\n提示:" << endl;
+                    cout << "  - 如果两张图像确实来自旋转180度后的同一场景，" << endl;
+                    cout << "    但相似度较低，可能需要调整相机外参或内参" << endl;
+                    cout << "  - 建议检查对比图中的网格是否对齐，" << endl;
+                    cout << "    特别是中心十字标记和相同的场景特征" << endl;
+                }
+                
+            } catch (const exception& e) {
+                cerr << "\n描述子提取过程发生异常: " << e.what() << endl;
+            }
+        } else if (!enable_similarity_check) {
+            cout << "\n提示: 模型未初始化，跳过相似度计算" << endl;
+            cout << "  - 如果需要计算相似度，请确保模型文件存在" << endl;
+        }
         
         cout << "\n按任意键退出..." << endl;
         waitKey(0);
@@ -299,6 +528,11 @@ int main(int argc, char** argv) {
         cout << "  camera4_image: 车辆旋转180度后camera_4拍摄的图像路径" << endl;
         cout << "\n示例:" << endl;
         cout << "  " << argv[0] << " /path/to/camera1.jpg /path/to/camera4.jpg" << endl;
+    }
+    
+    // 清理资源
+    if (eigenplaces_model) {
+        delete eigenplaces_model;
     }
     
     return 0;
