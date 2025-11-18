@@ -13,15 +13,22 @@
 # ============================================================================
 
 # 配置参数
-DATASET_FRONT="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/camera1"
-DATASET_REAR="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/camera4"
+# DATASET_FRONT="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/camera1"
+# DATASET_REAR="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/camera4"
+# MODEL_PATH="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/EigenPlaces/ONNX"
+# GT_POSES="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/dr_pose.txt"
+# CAMERA_CFG="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/config/cameras.cfg"
+# CONFIG_YAML="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/config/config.yaml"
+
+DATASET_FRONT="/home/xihuidong/codetree/repo/visual_mapping_test/OT_1_4/camera1"
+DATASET_REAR="/home/xihuidong/codetree/repo/visual_mapping_test/OT_1_4/camera4"
 MODEL_PATH="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/EigenPlaces/ONNX"
-GT_POSES="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/dr_pose.txt"
+GT_POSES="/home/xihuidong/codetree/repo/visual_mapping_test/OT_1_4/dr_pose.txt"
 CAMERA_CFG="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/config/cameras.cfg"
 CONFIG_YAML="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/config/config.yaml"
 
 # 地图保存路径
-MAP_FILE="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/maps/keyframe_db.bin"
+MAP_FILE="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/maps/keyframe_db_ot_1_4_mapping.bin"
 
 # 创建地图目录（如果不存在）
 MAP_DIR=$(dirname "$MAP_FILE")

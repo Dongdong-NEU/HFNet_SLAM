@@ -211,9 +211,16 @@ bool BuildKeyFrameDatabase(
     
     const int step = 1;
     int keyframe_count = 0;
+    // ot_1_4单向建图截止帧数
+    string end_mapping_frame_path = config.dataset_front_path + "1763019318.965643.png";
     
     for (size_t i = 0; i < files_front.size(); i += step) {
         KeyFrameNetVlad* keyframe = nullptr;
+
+        string front_path_test = config.dataset_front_path + files_front[i];
+        if(front_path_test == end_mapping_frame_path) {
+            break;
+        }
         
         if (config.use_offline_descriptor) {
             // 离线描述子模式
@@ -286,9 +293,9 @@ void RunLoopDetection(
     std::cout << "Starting loop detection..." << std::endl;
     std::cout << "========================================" << std::endl;
     
-    int frame_idx = 1800;
+    int frame_idx = 4000;
     bool use_rear = false;
-    
+
     while (frame_idx < static_cast<int>(files_front.size()) - 1) {
         // 检查暂停状态
         if (g_viewer && g_viewer->IsPaused()) {
@@ -377,7 +384,7 @@ void RunLoopDetection(
         
         // 检测到回环后跳过一段时间
         if (!ground_truth_candidates.empty() && detected_candidates.size() >= 3) {
-            frame_idx += 50;  // 跳过5秒（假设10fps）
+            frame_idx += 10;  // 跳过5秒（假设10fps）
         }
         
         delete query_frame;
@@ -465,7 +472,11 @@ void DisplayComparisonImages(
     cv::namedWindow("Loop Detection Results", cv::WINDOW_NORMAL);
     cv::resizeWindow("Loop Detection Results", 1600, 800);
     cv::imshow("Loop Detection Results", display);
+    if(detected_candidates.size() > 0) {
+        cv::waitKey(0);
+    }else{
     cv::waitKey(500);
+    }
 }
 
 // ============================================================================
@@ -661,9 +672,17 @@ int main(int argc, char** argv)
         model, keyframe_db, kdtree);
     
     // ========== 清理 ==========
+    // 先停止可视化线程，避免访问即将被删除的数据
+    if (config.enable_visualization) {
+        StopVisualization();
+    }
+    
+    // 清理模型
     if (model) {
         delete model;
     }
+    
+    // 清理关键帧数据库
     for (auto* kf : keyframe_db) {
         delete kf;
     }

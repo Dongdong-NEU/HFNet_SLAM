@@ -5,12 +5,19 @@ TrajectoryViewer* g_viewer = nullptr;
 
 // TrajectoryViewer类实现
 TrajectoryViewer::TrajectoryViewer() : current_frame_id_(-1), data_updated_(false), is_paused_(false), 
-                                       trail_enabled_(false), last_query_frame_id_(-1) {}
+                                       should_stop_(false), trail_enabled_(false), last_query_frame_id_(-1) {}
 
 // 获取暂停状态
 bool TrajectoryViewer::IsPaused() {
     std::lock_guard<std::mutex> lock(data_mutex_);
     return is_paused_;
+}
+
+// 停止可视化
+void TrajectoryViewer::Stop() {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    should_stop_ = true;
+    std::cout << "[TrajectoryViewer] Stop requested" << std::endl;
 }
 
 // 更新轨迹数据
@@ -98,6 +105,15 @@ void TrajectoryViewer::Run() {
     pangolin::Var<bool> menu_clear_query_trail("menu.Clear Query Points", false, false);
     
     while (!pangolin::ShouldQuit()) {
+        // 检查是否应该停止
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            if (should_stop_) {
+                std::cout << "[TrajectoryViewer] Stopping..." << std::endl;
+                break;
+            }
+        }
+        
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         d_cam.Activate(s_cam);
         
@@ -345,6 +361,16 @@ void StartVisualization() {
         std::thread viewer_thread(&TrajectoryViewer::Run, g_viewer);
         viewer_thread.detach();
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 等待初始化
+    }
+}
+
+// 停止可视化线程
+void StopVisualization() {
+    if (g_viewer) {
+        std::cout << "[StopVisualization] Requesting visualization to stop..." << std::endl;
+        g_viewer->Stop();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 等待可视化线程停止
+        std::cout << "[StopVisualization] Visualization stopped" << std::endl;
     }
 }
 

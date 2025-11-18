@@ -21,6 +21,7 @@ private:
     int current_frame_id_;
     bool data_updated_;
     bool is_paused_;
+    bool should_stop_;
     std::mutex data_mutex_;
     
     // Query帧路径追踪
@@ -33,6 +34,9 @@ public:
     
     // 获取暂停状态
     bool IsPaused();
+    
+    // 停止可视化
+    void Stop();
     
     // 更新轨迹数据
     void UpdateTrajectory(const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses);
@@ -61,6 +65,7 @@ extern TrajectoryViewer* g_viewer;
 
 // 函数声明
 void StartVisualization();
+void StopVisualization();
 void UpdateVisualization(const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses,
                         int queryFrameId, const KeyFrameDB& loopCandidates,
                         const std::vector<size_t>& kdtreeCandidates, const KeyFrameDB& keyFrameDB);
