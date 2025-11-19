@@ -1,4 +1,7 @@
 #include "common.h"
+#include <sys/stat.h>  // for mkdir
+#include <sys/types.h>
+#include <cerrno>  // for errno
 #include "loop_visual.h"
 #include "fisheye_utils.h"
 #include <opencv2/highgui.hpp>
@@ -15,6 +18,26 @@ using namespace cv;
 using namespace std;
 using namespace Eigen;
 using namespace DeepRoute;
+
+
+bool CreateDirectoryRecursive(const std::string& path) {
+    struct stat info;
+    if (stat(path.c_str(), &info) == 0) {
+        return (info.st_mode & S_IFDIR) != 0;  // 目录已存在
+    }
+    
+    // 递归创建父目录
+    size_t pos = path.find_last_of('/');
+    if (pos != std::string::npos) {
+        std::string parent = path.substr(0, pos);
+        if (!CreateDirectoryRecursive(parent)) {
+            return false;
+        }
+    }
+    
+    // 创建当前目录
+    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+}
 
 // ============================================================================
 // 配置结构体
@@ -110,7 +133,9 @@ void RunLoopDetection(
     const vector<double>& times,
     const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses,
     const pair<cv::Mat, cv::Mat>& undistort_maps_front,
+    const pair<cv::Mat, cv::Mat>& undistort_maps_rear,
     const FisheyeCameraParams& cam_params_front,
+    const FisheyeCameraParams& cam_params_rear,
     const cv::Size& target_size,
     EigenPlacesExtractor* model,
     const KeyFrameDB& keyframe_db,
@@ -125,7 +150,8 @@ void DisplayComparisonImages(
     const KeyFrameDB& detected_candidates,
     const KeyFrameDB& keyframe_db,
     const LoopDetectionConfig& config,
-    const vector<string>& files,
+    const vector<string>& files_front,
+    const vector<string>& files_rear,
     const cv::Size& target_size,
     bool use_rear);
 
@@ -211,17 +237,52 @@ bool BuildKeyFrameDatabase(
     
     const int step = 1;
     int keyframe_count = 0;
-    // ot_1_4单向建图截止帧数
-    string end_mapping_frame_path = config.dataset_front_path + "1763019318.965643.png";
-    
-    for (size_t i = 0; i < files_front.size(); i += step) {
-        KeyFrameNetVlad* keyframe = nullptr;
 
-        string front_path_test = config.dataset_front_path + files_front[i];
-        if(front_path_test == end_mapping_frame_path) {
-            break;
+
+    // string t_t =  "/1763019410.065747.png";
+    // string n_b =  "/1763019537.065877.png";
+    // string t_b =  "/1763019655.065983.png";
+    // string n_t =  "/1763019750.066070.png";
+    // bool find_t_t = false;
+    // bool find_n_b = false;
+    // bool find_t_b = false;
+    // bool find_n_t = false;
+    // auto it = std::find(files_front.begin(), files_front.end(), t_t);
+    // if(it != files_front.end()) {
+    //     find_t_t = true;
+    // }
+    // it = std::find(files_front.begin(), files_front.end(), n_b);
+    // if(it != files_front.end()) {
+    //     find_n_b = true;
+    // }
+    // it = std::find(files_front.begin(), files_front.end(), t_b);
+    // if(it != files_front.end()) {
+    //     find_t_b = true;
+    // }
+    // it = std::find(files_front.begin(), files_front.end(), n_t);
+    // if(it != files_front.end()) {
+    //     find_n_t = true;
+    // }
+    // std::cout << "find_t_t: " << find_t_t << std::endl;
+    // std::cout << "find_n_b: " << find_n_b << std::endl;
+    // std::cout << "find_t_b: " << find_t_b << std::endl;
+    // std::cout << "find_n_t: " << find_n_t << std::endl;
+
+    int end_mapping_frame = 3100;
+    
+    for (size_t i = 0; i < end_mapping_frame; i += step) {
+
+        Eigen::Matrix4d pose_last = Eigen::Matrix4d::Identity();
+        KeyFrameNetVlad* keyframe = nullptr;
+        if(i > 0) {
+            Eigen::Vector3d pose_last_t = pose_last.block<3,1>(0,3);
+            Eigen::Vector3d pose_current_t = poses[i].block<3,1>(0,3);
+            double trans_dist = (pose_current_t - pose_last_t).norm();
+            if (trans_dist < 1.0) {
+                continue;
+            }
         }
-        
+        pose_last = poses[i];
         if (config.use_offline_descriptor) {
             // 离线描述子模式
             auto load_start = chrono::steady_clock::now();
@@ -253,14 +314,18 @@ bool BuildKeyFrameDatabase(
             keyframe = new KeyFrameNetVlad(i, image_front, image_rear, model, times[i], poses[i]);
             auto feat_time = chrono::duration_cast<chrono::milliseconds>(
                 chrono::steady_clock::now() - feat_start).count();
-            
-            std::cout << "Frame " << i << " - Load: " << img_time << "ms, Extract: " 
-                     << feat_time << "ms" << std::endl;
         }
         
         keyframe_db.emplace_back(keyframe);
         keyframe_positions.push_back(poses[i].block<3,1>(0,3));
         keyframe_count++;
+        pose_last = poses[i];
+
+        // 每 100 帧显示一次进度
+        if (keyframe_count % 100 == 0 || keyframe_count == 1) {
+            std::cout << "  进度: " << keyframe_count << "/" << end_mapping_frame 
+                     << " (" << (keyframe_count * 100 / end_mapping_frame) << "%)" << std::endl;
+        }
     }
     
     auto db_time = chrono::duration_cast<chrono::seconds>(
@@ -283,7 +348,9 @@ void RunLoopDetection(
     const vector<double>& times,
     const std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>& poses,
     const pair<cv::Mat, cv::Mat>& undistort_maps_front,
+    const pair<cv::Mat, cv::Mat>& undistort_maps_rear,
     const FisheyeCameraParams& cam_params_front,
+    const FisheyeCameraParams& cam_params_rear,
     const cv::Size& target_size,
     EigenPlacesExtractor* model,
     const KeyFrameDB& keyframe_db,
@@ -293,8 +360,9 @@ void RunLoopDetection(
     std::cout << "Starting loop detection..." << std::endl;
     std::cout << "========================================" << std::endl;
     
-    int frame_idx = 4000;
+    int frame_idx = 4820;
     bool use_rear = false;
+    int end_frame = 0;
 
     while (frame_idx < static_cast<int>(files_front.size()) - 1) {
         // 检查暂停状态
@@ -310,7 +378,9 @@ void RunLoopDetection(
         
         // ========== 加载查询帧 ==========
         KeyFrameNetVlad* query_frame = nullptr;
+        KeyFrameNetVlad* query_frame_rear = nullptr;
         cv::Mat image_for_display;
+        cv::Mat image_for_display_rear;
         
         if (config.use_offline_descriptor) {
             query_frame = new KeyFrameNetVlad(frame_idx, timestamp, pose, 
@@ -319,21 +389,30 @@ void RunLoopDetection(
                                       IMREAD_COLOR);
         } else {
             string front_path = config.dataset_front_path + files_front[frame_idx];
+            string rear_path = config.dataset_rear_path + files_rear[frame_idx];
             cv::Mat image = LoadAndProcessImage(
                 front_path, config.enable_crop, config.front_crop,
                 undistort_maps_front, cam_params_front, target_size);
-            
+            cv::Mat image_rear = LoadAndProcessImage(
+                rear_path, config.enable_crop, config.rear_crop,
+                undistort_maps_rear, cam_params_rear, target_size);
             query_frame = new KeyFrameNetVlad(frame_idx, image, model, timestamp, pose);
+            query_frame_rear = new KeyFrameNetVlad(frame_idx, image_rear, model, timestamp, pose);
             image_for_display = imread(front_path, IMREAD_COLOR);
+            image_for_display_rear = imread(rear_path, IMREAD_COLOR);
         }
         
-        if (!image_for_display.empty()) {
+        if (!image_for_display.empty() && !image_for_display_rear.empty()) {
             if (config.enable_crop) {
                 image_for_display = CropImage(image_for_display, 
                     config.front_crop.x, config.front_crop.y,
                     config.front_crop.width, config.front_crop.height);
+                image_for_display_rear = CropImage(image_for_display_rear, 
+                    config.rear_crop.x, config.rear_crop.y,
+                    config.rear_crop.width, config.rear_crop.height);
             }
             cv::resize(image_for_display, image_for_display, target_size);
+            cv::resize(image_for_display_rear, image_for_display_rear, target_size);
         }
         
         // 更新查询位置可视化
@@ -367,7 +446,45 @@ void RunLoopDetection(
         std::cout << "\nFrame " << frame_idx << " - Query time: " << query_time << "ms" << std::endl;
         std::cout << "  Ground truth candidates: " << ground_truth_candidates.size() 
                  << ", Detected: " << detected_candidates.size() << std::endl;
-        
+        bool debug_save_image = true;
+        if(debug_save_image && ground_truth_candidates.size() > 0 && detected_candidates.size() == 0) {
+            string debug_dir = "/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/debug_image/" + std::to_string(frame_idx);
+            CreateDirectoryRecursive(debug_dir);
+            string debug_save_query_path = debug_dir + "/" + "front_query_" + files_front[frame_idx].substr(1);
+            string debug_save_query_rear_path = debug_dir + "/" + "rear_query_" + files_rear[frame_idx].substr(1);
+            string debug_save_gt_path = debug_dir + "/";
+            string debug_save_gt_rear_path = debug_dir + "/";
+
+            string image_path = config.dataset_front_path + files_front[frame_idx];
+            string image_path_rear = config.dataset_rear_path + files_rear[frame_idx];
+            cv::Mat image_front_query = cv::imread(image_path, IMREAD_COLOR);
+            cv::Mat image_rear_query = cv::imread(image_path_rear, IMREAD_COLOR);
+            cv::imwrite(debug_save_query_path , image_front_query);
+            cv::imwrite(debug_save_query_rear_path , image_rear_query);
+            for(size_t i = 0; i < ground_truth_candidates.size(); i++) {
+                size_t gt_idx = ground_truth_candidates[i];
+                
+                // 计算候选帧与查询帧的距离
+                Eigen::Vector3d gt_pos = keyframe_db[gt_idx]->curPose.block<3,1>(0,3);
+                double distance = (gt_pos - query_pos).norm();
+                
+                string image_path_gt = config.dataset_front_path + files_front[gt_idx];
+                string image_path_gt_rear = config.dataset_rear_path + files_rear[gt_idx];
+                cv::Mat image_gt = cv::imread(image_path_gt, IMREAD_COLOR);
+                cv::Mat image_gt_rear = cv::imread(image_path_gt_rear, IMREAD_COLOR);
+                
+                // 格式化距离（保留2位小数）
+                char dist_str[32];
+                snprintf(dist_str, sizeof(dist_str), "_dist_%.2fm", distance);
+                
+                cv::imwrite(debug_save_gt_path + std::to_string(i) + "_front_gt" + dist_str + "_" + files_front[gt_idx].substr(1), image_gt);
+                cv::imwrite(debug_save_gt_rear_path + std::to_string(i) + "_rear_gt" + dist_str + "_" + files_rear[gt_idx].substr(1), image_gt_rear);
+                
+                if(i == 2){
+                    break;
+                }
+            }
+        }
         // ========== 更新可视化 ==========
         if (config.enable_visualization) {
             UpdateVisualization(poses, frame_idx, detected_candidates, 
@@ -377,7 +494,7 @@ void RunLoopDetection(
             if (!ground_truth_candidates.empty() || !detected_candidates.empty()) {
                 DisplayComparisonImages(frame_idx, query_frame, image_for_display,
                                        ground_truth_candidates, detected_candidates,
-                                       keyframe_db, config, files_front, target_size,
+                                       keyframe_db, config, files_front, files_rear, target_size,
                                        use_rear);
             }
         }
@@ -407,10 +524,15 @@ void DisplayComparisonImages(
     const KeyFrameDB& detected_candidates,
     const KeyFrameDB& keyframe_db,
     const LoopDetectionConfig& config,
-    const vector<string>& files,
+    const vector<string>& files_front,
+    const vector<string>& files_rear,
     const cv::Size& target_size,
     bool use_rear)
 {
+    // TODO:注意：这里是为了测试，所以强制使用后置相机
+    bool tmp_use_rear = use_rear;
+    use_rear = true;
+    
     std::vector<cv::Mat> images(7);
     std::vector<std::string> labels(7);
     
@@ -424,7 +546,7 @@ void DisplayComparisonImages(
         if (i < gt_candidates.size()) {
             int kf_idx = gt_candidates[i];
             string image_path = (use_rear ? config.dataset_rear_path : config.dataset_front_path) 
-                              + files[keyframe_db[kf_idx]->mnFrameId];
+                              + (use_rear ? files_rear[keyframe_db[kf_idx]->mnFrameId] : files_front[keyframe_db[kf_idx]->mnFrameId]);
             images[1+i] = LoadImageForVisualization(
                 image_path, config.enable_crop, 
                 use_rear ? config.rear_crop : config.front_crop, target_size);
@@ -436,23 +558,23 @@ void DisplayComparisonImages(
             labels[1+i] = "GT " + std::to_string(i+1) + ": None";
         }
     }
-    
+    use_rear = tmp_use_rear;
     // EigenPlaces检测候选
     for (size_t i = 0; i < 3; ++i) {
         if (i < detected_candidates.size()) {
             float score = use_rear ? detected_candidates[i]->mPlaceRecognitionScore_rear 
                                    : detected_candidates[i]->mPlaceRecognitionScore_front;
             string image_path = (use_rear ? config.dataset_rear_path : config.dataset_front_path) 
-                              + files[detected_candidates[i]->mnFrameId];
+                              + (use_rear ? files_rear[detected_candidates[i]->mnFrameId] : files_front[detected_candidates[i]->mnFrameId]);
             images[4+i] = LoadImageForVisualization(
                 image_path, config.enable_crop,
                 use_rear ? config.rear_crop : config.front_crop, target_size);
-            labels[4+i] = "Detected " + std::to_string(i+1) + ": " + 
+            labels[4+i] = "Detected " + std::string(use_rear ? "rear" : "front") + " " + std::to_string(i+1) + ": " + 
                          std::to_string((int)detected_candidates[i]->mnFrameId) +
                          ", score=" + std::to_string(score);
         } else {
             images[4+i] = cv::Mat::zeros(target_size, CV_8UC3);
-            labels[4+i] = "Detected " + std::to_string(i+1) + ": None";
+            labels[4+i] = "Detected " + std::string(use_rear ? "rear" : "front") + " " + std::to_string(i+1) + ": None";
         }
     }
     
@@ -668,7 +790,7 @@ int main(int argc, char** argv)
     RunLoopDetection(
         config, aligned_data.files_front, aligned_data.files_rear,
         aligned_data.times, aligned_data.poses,
-        undistort_maps_front, cam_params_front, target_size,
+        undistort_maps_front, undistort_maps_rear, cam_params_front, cam_params_rear, target_size,
         model, keyframe_db, kdtree);
     
     // ========== 清理 ==========

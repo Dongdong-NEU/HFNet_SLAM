@@ -76,7 +76,7 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear
     timeStamp = time_stamp;
     curPose = pose;
     
-    std::cout << "  Processing front image with EigenPlaces..." << std::endl;
+    // std::cout << "  Processing front image with EigenPlaces..." << std::endl;
     auto front_start = std::chrono::steady_clock::now();
     bool front_success = pModel->ExtractGlobalDescriptor(im, mGlobalDescriptors_front);
     auto front_end = std::chrono::steady_clock::now();
@@ -87,7 +87,7 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear
         mGlobalDescriptors_front = cv::Mat::zeros(1, 2048, CV_32F); // EigenPlaces输出2048维特征
     }
     
-    std::cout << "  Processing rear image with EigenPlaces..." << std::endl;
+    // std::cout << "  Processing rear image with EigenPlaces..." << std::endl;
     auto rear_start = std::chrono::steady_clock::now();
     bool rear_success = pModel->ExtractGlobalDescriptor(im_rear, mGlobalDescriptors_rear);
     auto rear_end = std::chrono::steady_clock::now();
@@ -114,7 +114,12 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear
     // odom_file << to_string(time_stamp) << " " << pose(0,3) << " " << pose(1,3) << " " << pose(2,3) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
     // odom_file.close();
     
-    std::cout << "  Front EigenPlaces extraction: " << front_time << "ms, Rear: " << rear_time << "ms" << std::endl;
+    // 控制打印频率：每处理 50 帧打印一次
+    static int frame_count = 0;
+    frame_count++;
+    if (frame_count % 100 == 0) {
+        std::cout << "  [Frame " << frame_count << "] Front: " << front_time << "ms, Rear: " << rear_time << "ms" << std::endl;
+    }
 }
 // 定位用
 KeyFrameNetVlad::KeyFrameNetVlad(int id ,const cv::Mat im, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose) {
@@ -418,10 +423,12 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
                 pKF->mGlobalDescriptors_rear.cols);
         pKF->mPlaceRecognitionScore_front = (queryDescriptors - pKFDescriptors_front).norm();
         pKF->mPlaceRecognitionScore_rear = (queryDescriptors - pKFDescriptors_rear).norm();
+        std::cout << "pKF->mPlaceRecognitionScore_front: " << pKF->mPlaceRecognitionScore_front << std::endl;
+        std::cout << "pKF->mPlaceRecognitionScore_rear: " << pKF->mPlaceRecognitionScore_rear << std::endl;
         if (pKF->mPlaceRecognitionScore_front < 0.7){
             candidates_front.push_back(pKF);
         }
-        if (pKF->mPlaceRecognitionScore_rear < 0.7) {
+        if (pKF->mPlaceRecognitionScore_rear < 0.9) {
             candidates_rear.push_back(pKF);
         }
     }
