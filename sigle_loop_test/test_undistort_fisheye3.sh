@@ -1,9 +1,9 @@
 #!/bin/bash
 
-echo "测试 camera_4 图像去畸变..."
+echo "测试 panoramic_3 图像去畸变..."
 
 # 设置测试图像路径（请修改为你的实际图像路径）
-IMAGE_PATH="/home/xihuidong/codetree/repo/visual_mapping_test/avp-15/camera4/1747822563.930000.png"
+IMAGE_PATH="/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/debug_image/fisheye_test/front_query_1763019572.065888.png"
 
 # 检查图像是否存在
 if [ ! -f "$IMAGE_PATH" ]; then
@@ -15,8 +15,8 @@ fi
 cd build
 ./test_distort_image \
     "$IMAGE_PATH" \
-    camera_4 \
-    ../config/cameras.cfg \
+    panoramic_3 \
+    ../config/cameras_ot_1_4.cfg \
     ../config/config.yaml
 
 echo "测试完成!"

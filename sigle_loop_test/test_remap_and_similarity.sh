@@ -8,23 +8,8 @@ echo "========================================"
 echo "相机对齐与相似度验证脚本"
 echo "========================================"
 
-# 检查参数
-if [ $# -lt 2 ]; then
-    echo ""
-    echo "用法: $0 <camera1_image> <camera4_image>"
-    echo ""
-    echo "参数说明:"
-    echo "  camera1_image: camera_1拍摄的图像路径"
-    echo "  camera4_image: 车辆旋转180度后camera_4拍摄的图像路径"
-    echo ""
-    echo "示例:"
-    echo "  $0 /path/to/dataset_front/1234.jpg /path/to/dataset_rear/5678.jpg"
-    echo ""
-    exit 1
-fi
-
-CAMERA1_IMAGE=$1
-CAMERA4_IMAGE=$2
+CAMERA1_IMAGE="/home/xihuidong/codetree/repo/visual_mapping_test/OT_1_4/fisheye1/1763019575.165889.png"
+CAMERA4_IMAGE="/home/xihuidong/codetree/repo/visual_mapping_test/OT_1_4/fisheye3/1763019374.265722.png"
 
 # 检查图像文件是否存在
 if [ ! -f "$CAMERA1_IMAGE" ]; then

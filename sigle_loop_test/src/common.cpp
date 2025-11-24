@@ -43,7 +43,6 @@ cv::Mat CropImage(const cv::Mat& image, int x, int y, int width, int height)
     roi &= cv::Rect(0, 0, image.cols, image.rows);
 
     cv::Mat image_cropped = image(roi).clone();
-    // cv::resize(image_cropped, image_cropped, cv::Size(600, 450));
       
     return image_cropped;
 }
@@ -126,6 +125,7 @@ KeyFrameNetVlad::KeyFrameNetVlad(int id ,const cv::Mat im, EigenPlacesExtractor*
     mnFrameId = id;
     timeStamp = time_stamp;
     curPose = pose;
+    undistort_maps_front = im.clone();
     
     bool success = pModel->ExtractGlobalDescriptor(im, mGlobalDescriptors_front);
     if (!success) {
@@ -389,8 +389,9 @@ AlignedDualCameraData AlignDualCameraDataToTrajectory(const string& strDatasetPa
 }
 
 
-KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB &db, int k, bool &use_rear)
+KeyFrameDB  GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB &db, int k, bool &use_rear)
 {
+    use_rear = false;
     // 当前数据库中的全局描述子最少需要100帧
     if (db.front()->mnFrameId >= query->mnFrameId - 100) return KeyFrameDB();
 
@@ -423,17 +424,18 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
                 pKF->mGlobalDescriptors_rear.cols);
         pKF->mPlaceRecognitionScore_front = (queryDescriptors - pKFDescriptors_front).norm();
         pKF->mPlaceRecognitionScore_rear = (queryDescriptors - pKFDescriptors_rear).norm();
-        std::cout << "pKF->mPlaceRecognitionScore_front: " << pKF->mPlaceRecognitionScore_front << std::endl;
-        std::cout << "pKF->mPlaceRecognitionScore_rear: " << pKF->mPlaceRecognitionScore_rear << std::endl;
-        if (pKF->mPlaceRecognitionScore_front < 0.7){
+        std::cout << "pKF->mPlaceRecognitionScore_front: " << pKF->mnFrameId << ": " << pKF->mPlaceRecognitionScore_front << std::endl;
+        std::cout << "pKF->mPlaceRecognitionScore_rear: " << pKF->mnFrameId << ": " << pKF->mPlaceRecognitionScore_rear << std::endl;
+
+        if (pKF->mPlaceRecognitionScore_front < 0.70 && abs( pKF->mPlaceRecognitionScore_front - pKF->mPlaceRecognitionScore_rear) > 0.15){
             candidates_front.push_back(pKF);
-        }
-        if (pKF->mPlaceRecognitionScore_rear < 0.9) {
+
+        }else if (pKF->mPlaceRecognitionScore_rear < 0.75  && abs( pKF->mPlaceRecognitionScore_front - pKF->mPlaceRecognitionScore_rear) > 0.15) { 
             candidates_rear.push_back(pKF);
         }
     }
 
-    if(candidates_front.size() > 0 && candidates_rear.size() == 0) {
+    if(candidates_front.size() > 0) {
         std::cout << "Find front candidates found for query frame: " << query->mnFrameId << " candidates size: " << candidates_front.size() << std::endl;
         int num = std::min(k, (int)candidates_front.size());
         KeyFrameDB res(num);
@@ -442,7 +444,7 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
                 return f1->mPlaceRecognitionScore_front < f2->mPlaceRecognitionScore_front;
             });
         return res;
-    } else if(candidates_front.size() == 0 && candidates_rear.size() > 0) {
+    } else if(candidates_rear.size() > 0) {
         std::cout << "Find rear candidates found for query frame: " << query->mnFrameId << " candidates size: " << candidates_rear.size() << std::endl;
         int num = std::min(k, (int)candidates_rear.size());
         KeyFrameDB res(num);
@@ -453,12 +455,8 @@ KeyFrameDB GetNCandidateLoopFrameEigen(KeyFrameNetVlad* query, const KeyFrameDB 
         use_rear = true; 
         return res;
     } else if(candidates_rear.size() == 0 && candidates_front.size() == 0) {
-        std::cout << "No candidates found for query frame: " << query->mnFrameId << std::endl;
+        std::cout << "\033[31mNo candidates found for query frame: \033[0m" << query->mnFrameId << std::endl;
         return KeyFrameDB();
-    }else if(candidates_rear.size() > 0 && candidates_front.size() > 0) {
-        std::cout << "FATAL ERROR: Find front and rear candidates found for query frame: " << query->mnFrameId 
-                  << " front size: " << candidates_front.size() 
-                  << ", rear size: " << candidates_rear.size() << std::endl;
     }
 
     return KeyFrameDB();

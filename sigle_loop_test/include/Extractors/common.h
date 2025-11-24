@@ -31,6 +31,7 @@ struct KeyFrameNetVlad
     float mPlaceRecognitionScore_front = 1.0, mPlaceRecognitionScore_rear = 1.0; 
     double timeStamp;
     Eigen::Matrix4d curPose;
+    cv::Mat undistort_maps_front, undistort_maps_rear;
 
     KeyFrameNetVlad(int id, const cv::Mat im, const cv::Mat im_rear, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose);
     KeyFrameNetVlad(int id ,const cv::Mat im, EigenPlacesExtractor* pModel, double time_stamp, Eigen::Matrix4d pose);

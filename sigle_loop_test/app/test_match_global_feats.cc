@@ -18,7 +18,7 @@ using namespace cv;
 using namespace std;
 using namespace Eigen;
 using namespace DeepRoute;
-
+bool enable_undistort = true;
 
 bool CreateDirectoryRecursive(const std::string& path) {
     struct stat info;
@@ -83,10 +83,12 @@ struct LoopDetectionConfig {
         , min_frame_distance(300)
         , num_candidates(5)
     {
-        // 前置相机裁剪参数
-        front_crop = {960, 0, 1920, 1440};
-        // 后置相机裁剪参数
-        rear_crop = {480, 0, 960, 720};
+        // // 前置相机裁剪参数
+        // front_crop = {960, 0, 1920, 1440};
+        // // 后置相机裁剪参数
+        // rear_crop = {480, 0, 960, 720};
+        front_crop = {0, 0, 3840, 1440};
+        rear_crop = {0, 0, 1920, 720};
     }
 };
 
@@ -107,6 +109,8 @@ cv::Mat LoadImageForVisualization(
     const string& image_path,
     bool enable_crop,
     const LoopDetectionConfig::CropParams& crop_params,
+    const pair<cv::Mat, cv::Mat>& undistort_maps,
+    const FisheyeCameraParams& cam_params,
     const cv::Size& target_size);
 
 // 数据库构建
@@ -152,6 +156,10 @@ void DisplayComparisonImages(
     const LoopDetectionConfig& config,
     const vector<string>& files_front,
     const vector<string>& files_rear,
+    const pair<cv::Mat, cv::Mat>& undistort_maps_front,
+    const pair<cv::Mat, cv::Mat>& undistort_maps_rear,
+    const FisheyeCameraParams& cam_params_front,
+    const FisheyeCameraParams& cam_params_rear,
     const cv::Size& target_size,
     bool use_rear);
 
@@ -179,21 +187,35 @@ cv::Mat LoadAndProcessImage(
     if (enable_crop) {
         image = CropImage(image, crop_params.x, crop_params.y, 
                          crop_params.width, crop_params.height);
-    } else {
+        cv::resize(image, image, target_size);
+        // cv::imshow("image", image);
+        // cv::waitKey(0);
+        // cv::destroyAllWindows();
+        // cv::resize(image, image, target_size);
+        // cv::imshow("image", image);
+        // cv::waitKey(0);
+        // cv::destroyAllWindows();
+
+    } else if(enable_undistort) {
         image = UndistortImage(image, undistort_maps.first, undistort_maps.second, 
-                              cam_params, target_size);
+                              cam_params, cv::Size(960, 720));
+        // cv::resize(image, image, target_size);
+    }else{
+        cv::resize(image, image, target_size);
     }
-    
+
     return image;
 }
 
 /**
- * 加载图像用于可视化
+ * 加载图像用于可视化（支持去畸变）
  */
 cv::Mat LoadImageForVisualization(
     const string& image_path,
     bool enable_crop,
     const LoopDetectionConfig::CropParams& crop_params,
+    const pair<cv::Mat, cv::Mat>& undistort_maps,
+    const FisheyeCameraParams& cam_params,
     const cv::Size& target_size)
 {
     cv::Mat image = imread(image_path, IMREAD_COLOR);
@@ -204,9 +226,15 @@ cv::Mat LoadImageForVisualization(
     if (enable_crop) {
         image = CropImage(image, crop_params.x, crop_params.y, 
                          crop_params.width, crop_params.height);
+        cv::resize(image, image, target_size);
+    } else if(enable_undistort) {
+        // 去畸变处理
+        image = UndistortImage(image, undistort_maps.first, undistort_maps.second, 
+                              cam_params, cv::Size(960, 720));
+    } else {
+        cv::resize(image, image, target_size);
     }
     
-    cv::resize(image, image, target_size);
     return image;
 }
 
@@ -360,7 +388,7 @@ void RunLoopDetection(
     std::cout << "Starting loop detection..." << std::endl;
     std::cout << "========================================" << std::endl;
     
-    int frame_idx = 4820;
+    int frame_idx = 5652;
     bool use_rear = false;
     int end_frame = 0;
 
@@ -396,6 +424,10 @@ void RunLoopDetection(
             cv::Mat image_rear = LoadAndProcessImage(
                 rear_path, config.enable_crop, config.rear_crop,
                 undistort_maps_rear, cam_params_rear, target_size);
+            // cv::imshow("image_front", image);
+            // cv::imshow("image_rear", image_rear);
+            // cv::waitKey(0);
+            // cv::destroyAllWindows();
             query_frame = new KeyFrameNetVlad(frame_idx, image, model, timestamp, pose);
             query_frame_rear = new KeyFrameNetVlad(frame_idx, image_rear, model, timestamp, pose);
             image_for_display = imread(front_path, IMREAD_COLOR);
@@ -446,7 +478,7 @@ void RunLoopDetection(
         std::cout << "\nFrame " << frame_idx << " - Query time: " << query_time << "ms" << std::endl;
         std::cout << "  Ground truth candidates: " << ground_truth_candidates.size() 
                  << ", Detected: " << detected_candidates.size() << std::endl;
-        bool debug_save_image = true;
+        bool debug_save_image = false;
         if(debug_save_image && ground_truth_candidates.size() > 0 && detected_candidates.size() == 0) {
             string debug_dir = "/home/xihuidong/Documents/workspace/HFNet_SLAM-main/sigle_loop_test/debug_image/" + std::to_string(frame_idx);
             CreateDirectoryRecursive(debug_dir);
@@ -494,8 +526,10 @@ void RunLoopDetection(
             if (!ground_truth_candidates.empty() || !detected_candidates.empty()) {
                 DisplayComparisonImages(frame_idx, query_frame, image_for_display,
                                        ground_truth_candidates, detected_candidates,
-                                       keyframe_db, config, files_front, files_rear, target_size,
-                                       use_rear);
+                                       keyframe_db, config, files_front, files_rear,
+                                       undistort_maps_front, undistort_maps_rear,
+                                       cam_params_front, cam_params_rear,
+                                       target_size, use_rear);
             }
         }
         
@@ -526,70 +560,109 @@ void DisplayComparisonImages(
     const LoopDetectionConfig& config,
     const vector<string>& files_front,
     const vector<string>& files_rear,
+    const pair<cv::Mat, cv::Mat>& undistort_maps_front,
+    const pair<cv::Mat, cv::Mat>& undistort_maps_rear,
+    const FisheyeCameraParams& cam_params_front,
+    const FisheyeCameraParams& cam_params_rear,
     const cv::Size& target_size,
     bool use_rear)
-{
-    // TODO:注意：这里是为了测试，所以强制使用后置相机
-    bool tmp_use_rear = use_rear;
-    use_rear = true;
+{  
+    // 布局：
+    // Row 1: Query(front) | GT front 1 | GT front 2 | GT front 3
+    // Row 2: Query(rear)  | GT rear 1  | GT rear 2  | GT rear 3
+    // Row 3: Empty        | Detected 1 | Detected 2 | Detected 3
+    std::vector<cv::Mat> images(12);
+    std::vector<std::string> labels(12);
     
-    std::vector<cv::Mat> images(7);
-    std::vector<std::string> labels(7);
-    
-    // 查询帧
-    images[0] = query_image.clone();
-    labels[0] = "Query: " + std::to_string(query_frame_id) + 
+    // Query 图像（前置）
+    images[0] = query_frame->undistort_maps_front.clone();
+    labels[0] = "Query(front): " + std::to_string(query_frame_id) + 
                 ", t=" + std::to_string(query_frame->timeStamp);
     
     // KDTree候选（ground truth）
     for (size_t i = 0; i < 3; ++i) {
         if (i < gt_candidates.size()) {
             int kf_idx = gt_candidates[i];
-            string image_path = (use_rear ? config.dataset_rear_path : config.dataset_front_path) 
-                              + (use_rear ? files_rear[keyframe_db[kf_idx]->mnFrameId] : files_front[keyframe_db[kf_idx]->mnFrameId]);
+            string image_path = config.dataset_front_path + "/" + files_front[keyframe_db[kf_idx]->mnFrameId];
             images[1+i] = LoadImageForVisualization(
                 image_path, config.enable_crop, 
-                use_rear ? config.rear_crop : config.front_crop, target_size);
-            labels[1+i] = "GT " + std::to_string(i+1) + ": " + 
+                config.front_crop, undistort_maps_front, cam_params_front, target_size);
+            labels[1+i] = "GT front " + std::to_string(i+1) + ": " + 
                          std::to_string((int)keyframe_db[kf_idx]->mnFrameId) +
                          ", t=" + std::to_string(keyframe_db[kf_idx]->timeStamp);
         } else {
             images[1+i] = cv::Mat::zeros(target_size, CV_8UC3);
-            labels[1+i] = "GT " + std::to_string(i+1) + ": None";
+            labels[1+i] = "GT front " + std::to_string(i+1) + ": None";
         }
     }
-    use_rear = tmp_use_rear;
-    // EigenPlaces检测候选
+
+    // GT rear 候选（索引 4 为 query rear 的位置，暂时留空）
+    images[4] = cv::Mat::zeros(target_size, CV_8UC3);
+    labels[4] = "Query(rear): N/A";
+    
+    for (size_t i = 0; i < 3; ++i) {
+        if (i < gt_candidates.size()) {
+            int kf_idx = gt_candidates[i];
+            string image_path = config.dataset_rear_path + "/" + files_rear[keyframe_db[kf_idx]->mnFrameId];
+            images[5+i] = LoadImageForVisualization(
+                image_path, config.enable_crop, 
+                config.rear_crop, undistort_maps_rear, cam_params_rear, target_size);
+            labels[5+i] = "GT rear " + std::to_string(i+1) + ": " + 
+                         std::to_string((int)keyframe_db[kf_idx]->mnFrameId) +
+                         ", t=" + std::to_string(keyframe_db[kf_idx]->timeStamp);
+        } else {
+            images[5+i] = cv::Mat::zeros(target_size, CV_8UC3);
+            labels[5+i] = "GT rear " + std::to_string(i+1) + ": None";
+        }
+    }
+
+    // EigenPlaces检测候选（第三行）
+    images[8] = cv::Mat::zeros(target_size, CV_8UC3);
+    labels[8] = "Detected: ";
+    
     for (size_t i = 0; i < 3; ++i) {
         if (i < detected_candidates.size()) {
             float score = use_rear ? detected_candidates[i]->mPlaceRecognitionScore_rear 
                                    : detected_candidates[i]->mPlaceRecognitionScore_front;
+            std::cout << "use_rear: " << use_rear << std::endl;
+            std::cout << "score: " << score << std::endl;
+            std::cout << "rear score: " << detected_candidates[i]->mPlaceRecognitionScore_rear << std::endl;
+            std::cout << "front score: " << detected_candidates[i]->mPlaceRecognitionScore_front << std::endl;
             string image_path = (use_rear ? config.dataset_rear_path : config.dataset_front_path) 
                               + (use_rear ? files_rear[detected_candidates[i]->mnFrameId] : files_front[detected_candidates[i]->mnFrameId]);
-            images[4+i] = LoadImageForVisualization(
+            std::cout << "image_path: " << image_path << std::endl;
+            images[9+i] = LoadImageForVisualization(
                 image_path, config.enable_crop,
-                use_rear ? config.rear_crop : config.front_crop, target_size);
-            labels[4+i] = "Detected " + std::string(use_rear ? "rear" : "front") + " " + std::to_string(i+1) + ": " + 
+                use_rear ? config.rear_crop : config.front_crop,
+                use_rear ? undistort_maps_rear : undistort_maps_front,
+                use_rear ? cam_params_rear : cam_params_front,
+                target_size);
+            labels[9+i] = "Detected " + std::string(use_rear ? "rear" : "front") + " " + std::to_string(i+1) + ": " + 
                          std::to_string((int)detected_candidates[i]->mnFrameId) +
                          ", score=" + std::to_string(score);
         } else {
-            images[4+i] = cv::Mat::zeros(target_size, CV_8UC3);
-            labels[4+i] = "Detected " + std::string(use_rear ? "rear" : "front") + " " + std::to_string(i+1) + ": None";
+            images[9+i] = cv::Mat::zeros(target_size, CV_8UC3);
+            labels[9+i] = "Detected " + std::string(use_rear ? "rear" : "front") + " " + std::to_string(i+1) + ": None";
         }
     }
     
     // 添加文字标签
-    for (int i = 0; i < 7; ++i) {
+    for (int i = 0; i < 12; ++i) {
         cv::putText(images[i], labels[i], cv::Point(10, 30), 
                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0,255,0), 2);
     }
     
     // 拼接并显示
-    cv::Mat row1, row2, display;
+    // Row 1: images[0-3]  (Query front + GT front 1-3)
+    // Row 2: images[4-7]  (Query rear + GT rear 1-3)
+    // Row 3: images[8-11] (Empty + Detected 1-3)
+    cv::Mat row1, row2, row3, display;
     cv::hconcat(std::vector<cv::Mat>{images[0], images[1], images[2], images[3]}, row1);
-    cv::hconcat(std::vector<cv::Mat>{cv::Mat::zeros(target_size, CV_8UC3), 
-                                     images[4], images[5], images[6]}, row2);
+    cv::hconcat(std::vector<cv::Mat>{images[4], images[5], images[6], images[7]}, row2);
+    cv::hconcat(std::vector<cv::Mat>{images[8], images[9], images[10], images[11]}, row3);
+
     cv::vconcat(row1, row2, display);
+    cv::vconcat(display, row3, display);
     
     cv::namedWindow("Loop Detection Results", cv::WINDOW_NORMAL);
     cv::resizeWindow("Loop Detection Results", 1600, 800);
@@ -657,8 +730,8 @@ int main(int argc, char** argv)
     }
     
     // 设置模型文件名
-    config.onnx_model_name = "/eigenplaces_resnet50_fixedshape_300_400_GPU_simplified.onnx";
-    config.engine_cache_name = "/eigenplaces_resnet50_fixedshape_300_400_GPU_simplified.engine";
+    config.onnx_model_name = "/eigenplaces_resnet50_fixedshape_210_560_resenet101_simplified.onnx";
+    config.engine_cache_name = "/eigenplaces_resnet50_fixedshape_210_560_resenet101_simplified.engine";
     
     // ========== 加载配置和数据 ==========
     cv::Size target_size;
@@ -675,9 +748,13 @@ int main(int argc, char** argv)
         std::cerr << "Failed to load camera_4 parameters" << std::endl;
         return -1;
     }
+    cv::Size remap_size = cv::Size(1920, 1440);
+    double balance = 1;         // 平衡视野和图像质量 (0.0=保留所有像素, 1.0=去除黑边)
+    double fov_offset_y = 150.0;  // 视野向上抬150像素，减少底部车辆前盖（正值=向上，负值=向下）
+    double fov_offset_x = 0.0;    // 水平不偏移
     
-    pair<cv::Mat, cv::Mat> undistort_maps_front = UndistortFisheyeParam(cam_params_front);
-    pair<cv::Mat, cv::Mat> undistort_maps_rear = UndistortFisheyeParam(cam_params_rear);
+    pair<cv::Mat, cv::Mat> undistort_maps_front = UndistortFisheyeParam(cam_params_front, remap_size, balance, 100, fov_offset_x);
+    pair<cv::Mat, cv::Mat> undistort_maps_rear = UndistortFisheyeParam(cam_params_rear, remap_size, balance, fov_offset_y, fov_offset_x);  // 后置相机可能需要相反的偏移
     
     // 加载数据集
     auto aligned_data = AlignDualCameraDataToTrajectory(
